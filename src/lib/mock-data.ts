@@ -1,11 +1,4 @@
-import type { Task, Shift, ProductionCondition } from '@/types';
-
-export const initialTasks: Task[] = [
-  { jobCardNumber: 'JC-001', orderedQuantity: 50, itemCode: 'Gasket001', material: 'EPDM', remainingQuantity: 50 },
-  { jobCardNumber: 'JC-002', orderedQuantity: 80, itemCode: 'Gasket002', material: 'EPDM', remainingQuantity: 80 },
-  { jobCardNumber: 'JC-003', orderedQuantity: 120, itemCode: 'Gasket003', material: 'NBR', remainingQuantity: 120 },
-  { jobCardNumber: 'JC-004', orderedQuantity: 30, itemCode: 'Gasket001', material: 'EPDM', remainingQuantity: 30 },
-];
+import type { Shift, ProductionCondition } from '@/types';
 
 const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 export const initialShifts: Shift[] = days.flatMap(day => [

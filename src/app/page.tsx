@@ -6,15 +6,62 @@ import { TaskList } from '@/components/task-list';
 import { ScheduleGrid } from '@/components/schedule-grid';
 import { ProductionConditionsPanel } from '@/components/production-conditions-panel';
 import { ValidationDialog } from '@/components/validation-dialog';
-import { initialTasks, initialShifts, initialProductionConditions } from '@/lib/mock-data';
+import { initialShifts, initialProductionConditions } from '@/lib/mock-data';
 import type { Task, Shift, Schedule, ProductionCondition, ScheduledTask, ValidationRequest } from '@/types';
+import { useToast } from "@/hooks/use-toast";
 
 export default function Home() {
-  const [tasks, setTasks] = useState<Task[]>(initialTasks);
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [shifts, setShifts] = useState<Shift[]>(initialShifts);
   const [schedule, setSchedule] = useState<Schedule>({});
   const [productionConditions, setProductionConditions] = useState<ProductionCondition[]>(initialProductionConditions);
   const [validationRequest, setValidationRequest] = useState<ValidationRequest | null>(null);
+  const [isLoadingTasks, setIsLoadingTasks] = useState(false);
+  const { toast } = useToast();
+
+  const handleLoadTasks = async (url: string) => {
+    if (!url) {
+      toast({
+        title: "URL Required",
+        description: "Please enter the Apps Script URL.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsLoadingTasks(true);
+    try {
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const data = await response.json();
+
+      const fetchedTasks: Task[] = data.map((item: any) => ({
+        jobCardNumber: item.jobCardNumber,
+        orderedQuantity: item.orderedQuantity,
+        itemCode: item.itemCode,
+        material: item.material,
+        remainingQuantity: item.orderedQuantity,
+      }));
+
+      setTasks(fetchedTasks);
+      toast({
+        title: "Success",
+        description: `Loaded ${fetchedTasks.length} tasks successfully.`,
+      });
+
+    } catch (error) {
+      console.error("Failed to load tasks:", error);
+      toast({
+        title: "Error Loading Tasks",
+        description: "Could not fetch tasks. Check the URL and CORS settings.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoadingTasks(false);
+    }
+  };
 
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>, taskId: string) => {
     e.dataTransfer.setData('text/plain', taskId);
@@ -36,6 +83,11 @@ export default function Home() {
     task: Task,
     shift: Shift
   ) => {
+    const uniqueScheduledTask = {
+      ...scheduledTask,
+      id: `${scheduledTask.jobCardNumber}-${shift.id}-${Date.now()}`
+    }
+
     // Update tasks
     setTasks((prevTasks) =>
       prevTasks.map((t) =>
@@ -60,7 +112,7 @@ export default function Home() {
       if (!newSchedule[shift.id]) {
         newSchedule[shift.id] = [];
       }
-      newSchedule[shift.id].push(scheduledTask);
+      newSchedule[shift.id].push(uniqueScheduledTask);
       return newSchedule;
     });
 
@@ -72,7 +124,12 @@ export default function Home() {
       <Header />
       <main className="flex-1 flex flex-col lg:flex-row gap-6 p-4 lg:p-6 overflow-hidden">
         <div className="lg:w-1/3 flex flex-col gap-6 overflow-y-auto pr-2">
-          <TaskList tasks={tasks} onDragStart={handleDragStart} />
+          <TaskList
+            tasks={tasks}
+            onDragStart={handleDragStart}
+            onLoadTasks={handleLoadTasks}
+            isLoading={isLoadingTasks}
+          />
           <ProductionConditionsPanel productionConditions={productionConditions} />
         </div>
         <div className="lg:w-2/3 flex-1 overflow-x-auto">
