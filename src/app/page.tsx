@@ -104,7 +104,7 @@ export default function Home() {
     );
 
     // Update schedule, and generate the ID inside the functional update
-    // to ensure it's based on the most recent state.
+    // to ensure it's based on the most recent state and avoids mutation.
     setSchedule((prevSchedule) => {
       const { jobCardNumber } = scheduledTaskDetails;
       let batchCount = 0;
@@ -123,12 +123,13 @@ export default function Home() {
         ...scheduledTaskDetails,
         id: newId,
       };
+
+      const existingShiftTasks = prevSchedule[shift.id] || [];
+      const newSchedule = {
+        ...prevSchedule,
+        [shift.id]: [...existingShiftTasks, scheduledTask],
+      };
       
-      const newSchedule = { ...prevSchedule };
-      if (!newSchedule[shift.id]) {
-        newSchedule[shift.id] = [];
-      }
-      newSchedule[shift.id].push(scheduledTask);
       return newSchedule;
     });
 
