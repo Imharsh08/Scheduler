@@ -17,12 +17,12 @@ export default function Home() {
   const [validationRequest, setValidationRequest] = useState<ValidationRequest | null>(null);
 
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>, taskId: string) => {
-    e.dataTransfer.setData('taskId', taskId);
+    e.dataTransfer.setData('text/plain', taskId);
   };
 
   const handleDrop = (e: React.DragEvent<HTMLDivElement>, shiftId: string) => {
     e.preventDefault();
-    const taskId = e.dataTransfer.getData('taskId');
+    const taskId = e.dataTransfer.getData('text/plain');
     const task = tasks.find((t) => t.jobCardNumber === taskId);
     const shift = shifts.find((s) => s.id === shiftId);
 
