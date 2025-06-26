@@ -43,6 +43,8 @@ export default function Home() {
         itemCode: item.itemCode,
         material: item.material,
         remainingQuantity: item.orderedQuantity,
+        isPriority: item.isPriority === true || item.isPriority === 'TRUE',
+        creationDate: item.creationDate ? new Date(item.creationDate).toISOString() : new Date().toISOString(),
       }));
 
       setTasks(fetchedTasks);
@@ -83,9 +85,6 @@ export default function Home() {
     task: Task,
     shift: Shift
   ) => {
-    // The `scheduledTask` from the dialog already has a sufficiently unique ID.
-    // We can use it directly without creating a new object or ID.
-
     // Update tasks
     setTasks((prevTasks) =>
       prevTasks.map((t) =>

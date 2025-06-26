@@ -4,6 +4,8 @@ export interface Task {
   itemCode: string;
   material: string;
   remainingQuantity: number;
+  isPriority?: boolean;
+  creationDate: string; // ISO 8601 date string
 }
 
 export interface ProductionCondition {
