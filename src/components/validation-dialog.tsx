@@ -141,7 +141,7 @@ export const ValidationDialog: React.FC<ValidationDialogProps> = ({ request, pro
     const finalDieNo = parseInt(dieNo === 'other' ? otherDieNo : dieNo, 10);
 
     const newScheduledTask: ScheduledTask = {
-      id: `${task.jobCardNumber}-${shift.id}-${Date.now()}-${Math.random()}`,
+      id: `${task.jobCardNumber}-${shift.id}-${new Date().getTime()}-${Math.random().toString(36).slice(2)}`,
       jobCardNumber: task.jobCardNumber,
       itemCode: task.itemCode,
       material: task.material,
