@@ -85,44 +85,45 @@ export default function Home() {
     task: Task,
     shift: Shift
   ) => {
-    const { jobCardNumber } = scheduledTaskDetails;
-    let batchCount = 0;
-    Object.values(schedule).forEach(shiftTasks => {
-      shiftTasks.forEach(st => {
-        if (st.jobCardNumber === jobCardNumber) {
-          batchCount++;
-        }
-      });
-    });
-
-    const batchSuffix = String.fromCharCode('A'.charCodeAt(0) + batchCount);
-    const newId = `${jobCardNumber}-${batchSuffix}`;
-
-    const scheduledTask: ScheduledTask = {
-      ...scheduledTaskDetails,
-      id: newId,
-    };
-
-    // Update tasks
+    // Update tasks using details passed into the function
     setTasks((prevTasks) =>
       prevTasks.map((t) =>
         t.jobCardNumber === task.jobCardNumber
-          ? { ...t, remainingQuantity: t.remainingQuantity - scheduledTask.scheduledQuantity }
+          ? { ...t, remainingQuantity: t.remainingQuantity - scheduledTaskDetails.scheduledQuantity }
           : t
       ).filter(t => t.remainingQuantity > 0)
     );
 
-    // Update shifts
+    // Update shifts using details passed into the function
     setShifts((prevShifts) =>
       prevShifts.map((s) =>
         s.id === shift.id
-          ? { ...s, remainingCapacity: s.remainingCapacity - scheduledTask.timeTaken }
+          ? { ...s, remainingCapacity: s.remainingCapacity - scheduledTaskDetails.timeTaken }
           : s
       )
     );
 
-    // Update schedule
+    // Update schedule, and generate the ID inside the functional update
+    // to ensure it's based on the most recent state.
     setSchedule((prevSchedule) => {
+      const { jobCardNumber } = scheduledTaskDetails;
+      let batchCount = 0;
+      Object.values(prevSchedule).forEach(shiftTasks => {
+        shiftTasks.forEach(st => {
+          if (st.jobCardNumber === jobCardNumber) {
+            batchCount++;
+          }
+        });
+      });
+
+      const batchSuffix = String.fromCharCode('A'.charCodeAt(0) + batchCount);
+      const newId = `${jobCardNumber}-${batchSuffix}`;
+
+      const scheduledTask: ScheduledTask = {
+        ...scheduledTaskDetails,
+        id: newId,
+      };
+      
       const newSchedule = { ...prevSchedule };
       if (!newSchedule[shift.id]) {
         newSchedule[shift.id] = [];
