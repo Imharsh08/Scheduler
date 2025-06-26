@@ -10,6 +10,7 @@ import { Loader2, AlertCircle, CheckCircle } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import type { ValidationRequest, ProductionCondition, ScheduledTask, Task, Shift } from '@/types';
 import { validatePressDieCombination, type ValidatePressDieCombinationOutput } from '@/ai/flows/validate-press-die-combination';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface ValidationDialogProps {
   request: ValidationRequest;
@@ -21,18 +22,62 @@ interface ValidationDialogProps {
 export const ValidationDialog: React.FC<ValidationDialogProps> = ({ request, productionConditions, onClose, onSuccess }) => {
   const { task, shift } = request;
   const { toast } = useToast();
+  
   const [pressNo, setPressNo] = useState('');
+  const [otherPressNo, setOtherPressNo] = useState('');
+  
   const [dieNo, setDieNo] = useState('');
+  const [otherDieNo, setOtherDieNo] = useState('');
+  
   const [isLoading, setIsLoading] = useState(false);
   const [validationResult, setValidationResult] = useState<ValidatePressDieCombinationOutput | null>(null);
+
+  const pressOptions = React.useMemo(() => {
+    const presses = productionConditions
+      .filter(pc => pc.itemCode === task.itemCode && pc.material === task.material)
+      .map(pc => pc.pressNo);
+    return [...new Set(presses)].map(p => String(p));
+  }, [productionConditions, task.itemCode, task.material]);
+
+  const dieOptions = React.useMemo(() => {
+    if (!pressNo || pressNo === 'other') return [];
+    const selectedPress = parseInt(pressNo, 10);
+    const dies = productionConditions
+      .filter(pc => 
+          pc.itemCode === task.itemCode && 
+          pc.material === task.material && 
+          pc.pressNo === selectedPress
+      )
+      .map(pc => pc.dieNo);
+    return [...new Set(dies)].map(d => String(d));
+  }, [productionConditions, task.itemCode, task.material, pressNo]);
+  
+  useEffect(() => {
+    setDieNo('');
+    setOtherDieNo('');
+    setValidationResult(null);
+  }, [pressNo]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setValidationResult(null);
 
-    const press = parseInt(pressNo, 10);
-    const die = parseInt(dieNo, 10);
+    const finalPressNo = pressNo === 'other' ? otherPressNo : pressNo;
+    const finalDieNo = dieNo === 'other' ? otherDieNo : dieNo;
+
+    if (!finalPressNo || !finalDieNo) {
+      toast({
+        title: "Input Required",
+        description: "Please provide values for both Press and Die.",
+        variant: "destructive",
+      });
+      setIsLoading(false);
+      return;
+    }
+
+    const press = parseInt(finalPressNo, 10);
+    const die = parseInt(finalDieNo, 10);
 
     if (isNaN(press) || isNaN(die)) {
       toast({
@@ -74,7 +119,7 @@ export const ValidationDialog: React.FC<ValidationDialogProps> = ({ request, pro
           const timeTaken = cyclesForScheduledQty * condition.cureTime;
 
           const newScheduledTask: ScheduledTask = {
-            id: crypto.randomUUID(),
+            id: `${task.jobCardNumber}-${shift.id}-${Date.now()}-${Math.random()}`,
             jobCardNumber: task.jobCardNumber,
             itemCode: task.itemCode,
             material: task.material,
@@ -85,8 +130,7 @@ export const ValidationDialog: React.FC<ValidationDialogProps> = ({ request, pro
           };
           onSuccess(newScheduledTask, task, shift);
         } else {
-          // This should ideally not happen if validation is correct
-          setValidationResult({ isValid: false, reason: "Could not find matching production condition locally." });
+           setValidationResult({ isValid: false, reason: "Combination is valid but production details (like cure time) are unknown. Cannot schedule." });
         }
       }
     } catch (error) {
@@ -104,22 +148,67 @@ export const ValidationDialog: React.FC<ValidationDialogProps> = ({ request, pro
 
   return (
     <Dialog open={true} onOpenChange={onClose}>
-      <DialogContent>
+      <DialogContent className="sm:max-w-[480px]">
         <DialogHeader>
           <DialogTitle className="font-headline">Schedule Task: {task.jobCardNumber}</DialogTitle>
           <DialogDescription>
-            Enter Press and Die numbers for item <span className="font-semibold">{task.itemCode}</span> on <span className="font-semibold">{shift.day} {shift.type} Shift</span>.
+            Select or enter Press and Die numbers for item <span className="font-semibold">{task.itemCode}</span> on <span className="font-semibold">{shift.day} {shift.type} Shift</span>.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit}>
           <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="pressNo" className="text-right">Press No.</Label>
-              <Input id="pressNo" type="number" value={pressNo} onChange={(e) => setPressNo(e.target.value)} className="col-span-3" required />
+            <div className="grid grid-cols-4 items-start gap-4">
+              <Label htmlFor="pressNo" className="text-right pt-2">Press No.</Label>
+              <div className="col-span-3">
+                <Select value={pressNo} onValueChange={setPressNo}>
+                  <SelectTrigger id="pressNo">
+                    <SelectValue placeholder="Select a press..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {pressOptions.map(option => <SelectItem key={option} value={option}>{option}</SelectItem>)}
+                    <SelectItem value="other">Other...</SelectItem>
+                  </SelectContent>
+                </Select>
+                {pressNo === 'other' && (
+                  <Input 
+                    id="otherPressNo"
+                    type="number"
+                    value={otherPressNo}
+                    onChange={e => setOtherPressNo(e.target.value)}
+                    placeholder="Enter Press No."
+                    className="mt-2"
+                    required
+                  />
+                )}
+              </div>
             </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="dieNo" className="text-right">Die No.</Label>
-              <Input id="dieNo" type="number" value={dieNo} onChange={(e) => setDieNo(e.target.value)} className="col-span-3" required />
+            <div className="grid grid-cols-4 items-start gap-4">
+              <Label htmlFor="dieNo" className="text-right pt-2">Die No.</Label>
+              <div className="col-span-3">
+                 <Select value={dieNo} onValueChange={setDieNo} disabled={!pressNo}>
+                   <SelectTrigger id="dieNo">
+                     <SelectValue placeholder={!pressNo ? "Select a press first" : "Select a die..."} />
+                   </SelectTrigger>
+                   <SelectContent>
+                     {dieOptions.map(option => <SelectItem key={option} value={option}>{option}</SelectItem>)}
+                     <SelectItem value="other">Other...</SelectItem>
+                   </SelectContent>
+                 </Select>
+                 {dieNo === 'other' && (
+                   <Input 
+                     id="otherDieNo"
+                     type="number"
+                     value={otherDieNo}
+                     onChange={e => setOtherDieNo(e.target.value)}
+                     placeholder="Enter Die No."
+                     className="mt-2"
+                     required
+                   />
+                 )}
+                 {pressNo && pressNo !== 'other' && dieOptions.length === 0 && (
+                     <p className="text-xs text-muted-foreground mt-2 px-1">No predefined dies. Select "Other..." to enter manually.</p>
+                 )}
+              </div>
             </div>
           </div>
           {validationResult && (
