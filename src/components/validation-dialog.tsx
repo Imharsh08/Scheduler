@@ -74,7 +74,7 @@ export const ValidationDialog: React.FC<ValidationDialogProps> = ({ request, pro
           const timeTaken = cyclesForScheduledQty * condition.cureTime;
 
           const newScheduledTask: ScheduledTask = {
-            id: `${task.jobCardNumber}-${shift.id}-${Date.now()}`,
+            id: crypto.randomUUID(),
             jobCardNumber: task.jobCardNumber,
             itemCode: task.itemCode,
             material: task.material,
