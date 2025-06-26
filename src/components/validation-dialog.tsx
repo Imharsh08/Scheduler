@@ -16,7 +16,7 @@ interface ValidationDialogProps {
   request: ValidationRequest;
   productionConditions: ProductionCondition[];
   onClose: () => void;
-  onSuccess: (scheduledTask: ScheduledTask, task: Task, shift: Shift) => void;
+  onSuccess: (scheduledTaskDetails: Omit<ScheduledTask, 'id'>, task: Task, shift: Shift) => void;
 }
 
 export const ValidationDialog: React.FC<ValidationDialogProps> = ({ request, productionConditions, onClose, onSuccess }) => {
@@ -140,8 +140,7 @@ export const ValidationDialog: React.FC<ValidationDialogProps> = ({ request, pro
     const finalPressNo = parseInt(pressNo === 'other' ? otherPressNo : pressNo, 10);
     const finalDieNo = parseInt(dieNo === 'other' ? otherDieNo : dieNo, 10);
 
-    const newScheduledTask: ScheduledTask = {
-      id: `${task.jobCardNumber}-${shift.id}-${new Date().getTime()}-${Math.random().toString(36).slice(2)}`,
+    const newScheduledTaskDetails: Omit<ScheduledTask, 'id'> = {
       jobCardNumber: task.jobCardNumber,
       itemCode: task.itemCode,
       material: task.material,
@@ -150,7 +149,7 @@ export const ValidationDialog: React.FC<ValidationDialogProps> = ({ request, pro
       dieNo: finalDieNo,
       timeTaken: timeTaken,
     };
-    onSuccess(newScheduledTask, task, shift);
+    onSuccess(newScheduledTaskDetails, task, shift);
   };
   
   const handleQuantityChange = (e: React.ChangeEvent<HTMLInputElement>) => {

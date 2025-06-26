@@ -81,10 +81,28 @@ export default function Home() {
   };
 
   const handleValidationSuccess = (
-    scheduledTask: ScheduledTask,
+    scheduledTaskDetails: Omit<ScheduledTask, 'id'>,
     task: Task,
     shift: Shift
   ) => {
+    const { jobCardNumber } = scheduledTaskDetails;
+    let batchCount = 0;
+    Object.values(schedule).forEach(shiftTasks => {
+      shiftTasks.forEach(st => {
+        if (st.jobCardNumber === jobCardNumber) {
+          batchCount++;
+        }
+      });
+    });
+
+    const batchSuffix = String.fromCharCode('A'.charCodeAt(0) + batchCount);
+    const newId = `${jobCardNumber}-${batchSuffix}`;
+
+    const scheduledTask: ScheduledTask = {
+      ...scheduledTaskDetails,
+      id: newId,
+    };
+
     // Update tasks
     setTasks((prevTasks) =>
       prevTasks.map((t) =>
