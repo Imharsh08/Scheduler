@@ -85,16 +85,18 @@ export default function Home() {
     task: Task,
     shift: Shift
   ) => {
-    // Update tasks using details passed into the function
+    // Update tasks by reducing the remaining quantity
     setTasks((prevTasks) =>
-      prevTasks.map((t) =>
-        t.jobCardNumber === task.jobCardNumber
-          ? { ...t, remainingQuantity: t.remainingQuantity - scheduledTaskDetails.scheduledQuantity }
-          : t
-      ).filter(t => t.remainingQuantity > 0)
+      prevTasks
+        .map((t) =>
+          t.jobCardNumber === task.jobCardNumber
+            ? { ...t, remainingQuantity: t.remainingQuantity - scheduledTaskDetails.scheduledQuantity }
+            : t
+        )
+        .filter((t) => t.remainingQuantity > 0)
     );
 
-    // Update shifts using details passed into the function
+    // Update the specific shift's remaining capacity
     setShifts((prevShifts) =>
       prevShifts.map((s) =>
         s.id === shift.id
@@ -103,18 +105,14 @@ export default function Home() {
       )
     );
 
-    // Update schedule, and generate the ID inside the functional update
-    // to ensure it's based on the most recent state and avoids mutation.
+    // Add the task to the schedule with a unique batch ID
     setSchedule((prevSchedule) => {
       const { jobCardNumber } = scheduledTaskDetails;
-      let batchCount = 0;
-      Object.values(prevSchedule).forEach(shiftTasks => {
-        shiftTasks.forEach(st => {
-          if (st.jobCardNumber === jobCardNumber) {
-            batchCount++;
-          }
-        });
-      });
+
+      // Count existing batches for this job card across all shifts to determine the new suffix
+      const batchCount = Object.values(prevSchedule)
+        .flat()
+        .filter((st) => st.jobCardNumber === jobCardNumber).length;
 
       const batchSuffix = String.fromCharCode('A'.charCodeAt(0) + batchCount);
       const newId = `${jobCardNumber}-${batchSuffix}`;
@@ -124,13 +122,14 @@ export default function Home() {
         id: newId,
       };
 
-      const existingShiftTasks = prevSchedule[shift.id] || [];
-      const newSchedule = {
+      // Create a new array for the target shift's tasks, including the new one
+      const newShiftTasks = [...(prevSchedule[shift.id] || []), scheduledTask];
+
+      // Return a new schedule object with the updated shift
+      return {
         ...prevSchedule,
-        [shift.id]: [...existingShiftTasks, scheduledTask],
+        [shift.id]: newShiftTasks,
       };
-      
-      return newSchedule;
     });
 
     setValidationRequest(null);
