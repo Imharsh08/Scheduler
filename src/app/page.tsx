@@ -6,12 +6,12 @@ import { TaskList } from '@/components/task-list';
 import { ScheduleGrid } from '@/components/schedule-grid';
 import { ProductionConditionsPanel } from '@/components/production-conditions-panel';
 import { ValidationDialog } from '@/components/validation-dialog';
-import { initialShifts, initialProductionConditions } from '@/lib/mock-data';
+import { initialShifts, initialProductionConditions, initialTasks } from '@/lib/mock-data';
 import type { Task, Shift, Schedule, ProductionCondition, ScheduledTask, ValidationRequest } from '@/types';
 import { useToast } from "@/hooks/use-toast";
 
 export default function Home() {
-  const [tasks, setTasks] = useState<Task[]>([]);
+  const [tasks, setTasks] = useState<Task[]>(initialTasks);
   const [shifts, setShifts] = useState<Shift[]>(initialShifts);
   const [schedule, setSchedule] = useState<Schedule>({});
   const [productionConditions, setProductionConditions] = useState<ProductionCondition[]>(initialProductionConditions);
