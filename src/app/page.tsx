@@ -83,10 +83,8 @@ export default function Home() {
     task: Task,
     shift: Shift
   ) => {
-    const uniqueScheduledTask = {
-      ...scheduledTask,
-      id: `${scheduledTask.jobCardNumber}-${shift.id}-${Date.now()}`
-    }
+    // The `scheduledTask` from the dialog already has a sufficiently unique ID.
+    // We can use it directly without creating a new object or ID.
 
     // Update tasks
     setTasks((prevTasks) =>
@@ -112,7 +110,7 @@ export default function Home() {
       if (!newSchedule[shift.id]) {
         newSchedule[shift.id] = [];
       }
-      newSchedule[shift.id].push(uniqueScheduledTask);
+      newSchedule[shift.id].push(scheduledTask);
       return newSchedule;
     });
 
