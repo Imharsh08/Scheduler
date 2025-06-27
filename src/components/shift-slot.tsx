@@ -28,7 +28,20 @@ export const ShiftSlot: React.FC<ShiftSlotProps> = ({ shift, scheduledTasks, onD
     setIsOver(false);
   };
   
-  const capacityUsed = ((shift.capacity - shift.remainingCapacity) / shift.capacity) * 100;
+  const capacityUsed = shift.capacity > 0 ? ((shift.capacity - shift.remainingCapacity) / shift.capacity) * 100 : 0;
+  const isOverCapacity = shift.remainingCapacity < 0;
+
+  const TimeLeftDisplay = () => {
+    if (isOverCapacity) {
+      const overTime = Math.abs(shift.remainingCapacity);
+      const overHours = Math.floor(overTime / 60);
+      const overMinutes = Math.round(overTime % 60);
+      return <span className="text-destructive font-medium">Over by {overHours}h {overMinutes}m</span>;
+    }
+    const remainingHours = Math.floor(shift.remainingCapacity / 60);
+    const remainingMinutes = Math.round(shift.remainingCapacity % 60);
+    return <span>{remainingHours}h {remainingMinutes}m left</span>;
+  };
 
   return (
     <Card 
@@ -45,10 +58,13 @@ export const ShiftSlot: React.FC<ShiftSlotProps> = ({ shift, scheduledTasks, onD
             </div>
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Clock className="w-4 h-4" />
-                <span>{Math.round(shift.remainingCapacity / 60)}h left</span>
+                <TimeLeftDisplay />
             </div>
         </div>
-        <Progress value={capacityUsed} className="w-full h-2 mt-2" />
+        <Progress 
+          value={isOverCapacity ? 100 : capacityUsed} 
+          className={`w-full h-2 mt-2 ${isOverCapacity ? '[&>div]:bg-destructive' : ''}`}
+        />
       </CardHeader>
       <CardContent className="p-4 pt-0 space-y-2 flex-1 bg-secondary/30 rounded-b-lg">
         {scheduledTasks.length > 0 ? (

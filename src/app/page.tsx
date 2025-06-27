@@ -153,47 +153,48 @@ export default function Home() {
     task: Task,
     shift: Shift
   ) => {
+    // Generate the unique ID for the new scheduled task.
+    // This can safely read the current 'schedule' state.
+    const batchCount = Object.values(schedule)
+      .flat()
+      .filter(st => st.jobCardNumber === task.jobCardNumber).length;
+    
+    const batchSuffix = String.fromCharCode('A'.charCodeAt(0) + batchCount);
+    const newId = `${task.jobCardNumber}-${batchSuffix}`;
+
+    const scheduledTask: ScheduledTask = {
+      ...scheduledTaskDetails,
+      id: newId,
+    };
+
+    // Update the schedule state
     setSchedule((currentSchedule) => {
-      // Logic to generate the new unique ID goes *inside* the state setter
-      const batchCount = Object.values(currentSchedule)
-        .flat()
-        .filter(st => st.jobCardNumber === task.jobCardNumber).length;
-      
-      const batchSuffix = String.fromCharCode('A'.charCodeAt(0) + batchCount);
-      const newId = `${task.jobCardNumber}-${batchSuffix}`;
-
-      const scheduledTask: ScheduledTask = {
-        ...scheduledTaskDetails,
-        id: newId,
-      };
-
-      // Update tasks by reducing the remaining quantity
-      setTasks((prevTasks) =>
-        prevTasks
-          .map((t) =>
-            t.jobCardNumber === task.jobCardNumber
-              ? { ...t, remainingQuantity: t.remainingQuantity - scheduledTaskDetails.scheduledQuantity }
-              : t
-          )
-          .filter((t) => t.remainingQuantity > 0)
-      );
-
-      // Update the specific shift's remaining capacity
-      setShifts((prevShifts) =>
-        prevShifts.map((s) =>
-          s.id === shift.id
-            ? { ...s, remainingCapacity: s.remainingCapacity - scheduledTaskDetails.timeTaken }
-            : s
-        )
-      );
-      
-      // Add the task to the schedule
       const newSchedule = { ...currentSchedule };
       const newShiftTasks = [...(newSchedule[shift.id] || []), scheduledTask];
       newSchedule[shift.id] = newShiftTasks;
       return newSchedule;
     });
 
+    // Update tasks state
+    setTasks((prevTasks) =>
+      prevTasks
+        .map((t) =>
+          t.jobCardNumber === task.jobCardNumber
+            ? { ...t, remainingQuantity: t.remainingQuantity - scheduledTaskDetails.scheduledQuantity }
+            : t
+        )
+        .filter((t) => t.remainingQuantity > 0)
+    );
+
+    // Update shifts state
+    setShifts((prevShifts) =>
+      prevShifts.map((s) =>
+        s.id === shift.id
+          ? { ...s, remainingCapacity: s.remainingCapacity - scheduledTaskDetails.timeTaken }
+          : s
+      )
+    );
+    
     setValidationRequest(null);
   };
 
