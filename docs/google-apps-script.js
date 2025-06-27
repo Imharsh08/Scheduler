@@ -159,7 +159,7 @@ function doPost(e) {
     if (!sheet) {
       sheet = SpreadsheetApp.getActiveSpreadsheet().insertSheet(SHEET_NAME);
       // Set up headers for the new sheet
-      sheet.appendRow(['jobCardNumber', 'itemCode', 'material', 'scheduledQuantity', 'pressNo', 'dieNo', 'timeTaken', 'shiftId', 'timestamp']);
+      sheet.appendRow(['jobCardNumber', 'itemCode', 'material', 'scheduledQuantity', 'pressNo', 'dieNo', 'timeTaken', 'shiftId', 'startTime', 'endTime', 'timestamp']);
     }
 
     // Assumes the request body is a JSON string of an array of scheduled tasks
@@ -181,6 +181,8 @@ function doPost(e) {
         task.dieNo || 0,
         task.timeTaken || 0,
         task.shiftId || '', // The front-end would need to add this to the payload
+        task.startTime || '',
+        task.endTime || '',
         timestamp
       ]);
     });

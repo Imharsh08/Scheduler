@@ -19,6 +19,8 @@ export async function POST(request: NextRequest) {
       dieNo: task.dieNo,
       timeTaken: task.timeTaken,
       shiftId: task.shiftId,
+      startTime: task.startTime,
+      endTime: task.endTime,
     }));
 
     if(scheduledTasks.length === 0) {

@@ -16,14 +16,53 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import {
+  startOfWeek,
+  nextDay,
+  setHours,
+  setMinutes,
+  setSeconds,
+  addMinutes,
+  format,
+} from 'date-fns';
+
 
 interface ValidationDialogProps {
   request: ValidationRequest;
   productionConditions: ProductionCondition[];
   shifts: Shift[];
   onClose: () => void;
-  onSuccess: (scheduledItems: Omit<ScheduledTask, 'id'>[]) => void;
+  onSuccess: (scheduledItems: Omit<ScheduledTask, 'id' | 'startTime' | 'endTime'>[]) => void;
 }
+
+const dayIndexMap: Record<string, 0 | 1 | 2 | 3 | 4 | 5 | 6> = {
+  Sunday: 0,
+  Monday: 1,
+  Tuesday: 2,
+  Wednesday: 3,
+  Thursday: 4,
+  Friday: 5,
+  Saturday: 6,
+};
+
+// Helper function to get the absolute start date and time of a shift
+const getShiftStartDateTime = (shift: Shift): Date => {
+  const now = new Date();
+  // We'll calculate dates based on the upcoming week, starting from the nearest Monday.
+  const thisMonday = startOfWeek(now, { weekStartsOn: 1 });
+  const targetDayIndex = dayIndexMap[shift.day];
+  
+  // Find the next occurrence of the target day.
+  let shiftDate = nextDay(thisMonday, targetDayIndex);
+
+  // If the calculated day is in the past relative to 'now' and it's not today, move to the next week.
+  if (shiftDate < now && format(shiftDate, 'yyyy-MM-dd') !== format(now, 'yyyy-MM-dd')) {
+    shiftDate = nextDay(addMinutes(thisMonday, 10080), targetDayIndex); // 10080 minutes in a week
+  }
+
+  const hours = shift.type === 'Day' ? 8 : 20; // Day shift starts at 8 AM, Night shift at 8 PM
+  return setSeconds(setMinutes(setHours(shiftDate, hours), 0), 0);
+};
 
 export const ValidationDialog: React.FC<ValidationDialogProps> = ({ request, productionConditions, shifts, onClose, onSuccess }) => {
   const { task, shift } = request;
@@ -209,6 +248,11 @@ export const ValidationDialog: React.FC<ValidationDialogProps> = ({ request, pro
         const cyclesForThisShift = Math.ceil(qtyForThisShift / piecesPerCycle);
         const timeForThisShift = cyclesForThisShift * selectedCondition.cureTime;
 
+        const timeUsedInShift = currentShift.capacity - currentShift.remainingCapacity;
+        const shiftStartDateTime = getShiftStartDateTime(currentShift);
+        const taskStartTime = addMinutes(shiftStartDateTime, timeUsedInShift);
+        const taskEndTime = addMinutes(taskStartTime, timeForThisShift);
+
         plan.push({
             jobCardNumber: task.jobCardNumber,
             itemCode: task.itemCode,
@@ -218,6 +262,8 @@ export const ValidationDialog: React.FC<ValidationDialogProps> = ({ request, pro
             dieNo: finalDieNo,
             timeTaken: timeForThisShift,
             shiftId: currentShift.id,
+            startTime: taskStartTime.toISOString(),
+            endTime: taskEndTime.toISOString(),
         });
 
         remainingQtyToSchedule -= qtyForThisShift;
@@ -253,6 +299,11 @@ export const ValidationDialog: React.FC<ValidationDialogProps> = ({ request, pro
 
     const finalPressNo = parseInt(pressNo === 'other' ? otherPressNo : pressNo, 10);
     const finalDieNo = parseInt(dieNo === 'other' ? otherDieNo : dieNo, 10);
+
+    const timeUsedInShift = shift.capacity - shift.remainingCapacity;
+    const shiftStartDateTime = getShiftStartDateTime(shift);
+    const taskStartTime = addMinutes(shiftStartDateTime, timeUsedInShift);
+    const taskEndTime = addMinutes(taskStartTime, timeTaken);
     
     const newScheduledTask: Omit<ScheduledTask, 'id'> = {
       jobCardNumber: task.jobCardNumber,
@@ -263,6 +314,8 @@ export const ValidationDialog: React.FC<ValidationDialogProps> = ({ request, pro
       dieNo: finalDieNo,
       timeTaken: timeTaken,
       shiftId: shift.id,
+      startTime: taskStartTime.toISOString(),
+      endTime: taskEndTime.toISOString(),
     };
     onSuccess([newScheduledTask]);
   };

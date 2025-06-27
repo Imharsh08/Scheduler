@@ -38,6 +38,8 @@ export interface ScheduledTask {
   dieNo: number;
   timeTaken: number; // in minutes
   shiftId: string;
+  startTime: string; // ISO 8601 date string
+  endTime: string; // ISO 8601 date string
 }
 
 export type Schedule = Record<string, ScheduledTask[]>; // key is shiftId

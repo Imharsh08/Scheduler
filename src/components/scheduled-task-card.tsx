@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { CheckCircle, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getPressColorClass } from '@/lib/color-utils';
+import { format } from 'date-fns';
 
 interface ScheduledTaskCardProps {
   task: ScheduledTask;
@@ -14,6 +15,14 @@ interface ScheduledTaskCardProps {
 
 export const ScheduledTaskCard: React.FC<ScheduledTaskCardProps> = ({ task, pressColors }) => {
   const colorClass = getPressColorClass(task.pressNo, pressColors);
+
+  const formatTime = (dateString: string) => {
+    try {
+      return format(new Date(dateString), 'HH:mm');
+    } catch {
+      return 'Invalid time';
+    }
+  }
 
   return (
     <Card className={cn("shadow-sm border", colorClass)}>
@@ -32,7 +41,7 @@ export const ScheduledTaskCard: React.FC<ScheduledTaskCardProps> = ({ task, pres
             </div>
             <div className="flex items-center gap-1">
                 <Clock className="w-3 h-3" />
-                <span>{task.timeTaken} min</span>
+                <span>{formatTime(task.startTime)} - {formatTime(task.endTime)} ({task.timeTaken} min)</span>
             </div>
         </div>
         <div className="text-xs mt-1 text-muted-foreground">
