@@ -11,8 +11,7 @@ import { ValidationDialog } from '@/components/validation-dialog';
 import { initialShifts, initialProductionConditions, initialTasks } from '@/lib/mock-data';
 import type { Task, Shift, Schedule, ProductionCondition, ScheduledTask, ValidationRequest, IntegrationUrls } from '@/types';
 import { useToast } from "@/hooks/use-toast";
-import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
-import { IntegrationSidebar } from '@/components/integration-sidebar';
+import { IntegrationDialog } from '@/components/integration-dialog';
 
 export default function Home() {
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
@@ -32,11 +31,15 @@ export default function Home() {
     save: '',
   });
 
+  const [isIntegrationDialogOpen, setIsIntegrationDialogOpen] = useState(false);
+
   useEffect(() => {
     try {
       const savedUrls = localStorage.getItem('integrationUrls');
       if (savedUrls) {
         setUrls(JSON.parse(savedUrls));
+      } else {
+        setIsIntegrationDialogOpen(true);
       }
     } catch (error) {
       console.error("Failed to load URLs from localStorage", error);
@@ -302,47 +305,41 @@ export default function Home() {
   };
 
   return (
-    <SidebarProvider>
-      <div className="flex flex-col h-screen bg-background text-foreground">
-        <Header onSave={handleSaveSchedule} isSaving={isSaving} />
-        <div className="flex-1 flex flex-row min-h-0">
-          <IntegrationSidebar 
-            urls={urls}
-            onSaveUrls={handleSaveUrls}
+    <div className="flex flex-col h-screen bg-background text-foreground">
+      <Header
+        onSave={handleSaveSchedule}
+        isSaving={isSaving}
+        onOpenIntegrationDialog={() => setIsIntegrationDialogOpen(true)}
+      />
+      <main className="flex-1 flex flex-col lg:flex-row gap-6 p-4 lg:p-6 overflow-hidden">
+        <div className="lg:w-1/3 flex flex-col gap-6 overflow-y-auto pr-2">
+          <PressWorkloadPanel
+            tasks={tasks}
+            schedule={schedule}
+            productionConditions={productionConditions}
+            onPressSelect={handlePressSelect}
+            selectedPress={selectedPress}
           />
-          <SidebarInset>
-            <main className="flex-1 flex flex-col lg:flex-row gap-6 p-4 lg:p-6 overflow-hidden">
-              <div className="lg:w-1/3 flex flex-col gap-6 overflow-y-auto pr-2">
-                <PressWorkloadPanel
-                  tasks={tasks}
-                  schedule={schedule}
-                  productionConditions={productionConditions}
-                  onPressSelect={handlePressSelect}
-                  selectedPress={selectedPress}
-                />
-                <TaskList
-                  tasks={filteredTasks}
-                  onDragStart={handleDragStart}
-                  onLoadTasks={handleLoadTasks}
-                  isLoading={isLoadingTasks}
-                />
-                <ProductionConditionsPanel
-                  productionConditions={productionConditions}
-                  onLoadConditions={handleLoadProductionConditions}
-                  isLoading={isLoadingConditions}
-                />
-              </div>
-              <div className="lg:w-2/3 flex-1 overflow-x-auto">
-                <ScheduleGrid
-                  shifts={shifts}
-                  schedule={schedule}
-                  onDrop={handleDrop}
-                />
-              </div>
-            </main>
-          </SidebarInset>
+          <TaskList
+            tasks={filteredTasks}
+            onDragStart={handleDragStart}
+            onLoadTasks={handleLoadTasks}
+            isLoading={isLoadingTasks}
+          />
+          <ProductionConditionsPanel
+            productionConditions={productionConditions}
+            onLoadConditions={handleLoadProductionConditions}
+            isLoading={isLoadingConditions}
+          />
         </div>
-      </div>
+        <div className="lg:w-2/3 flex-1 overflow-x-auto">
+          <ScheduleGrid
+            shifts={shifts}
+            schedule={schedule}
+            onDrop={handleDrop}
+          />
+        </div>
+      </main>
       {validationRequest && (
         <ValidationDialog
           request={validationRequest}
@@ -352,6 +349,12 @@ export default function Home() {
           onSuccess={handleValidationSuccess}
         />
       )}
-    </SidebarProvider>
+      <IntegrationDialog
+        open={isIntegrationDialogOpen}
+        onOpenChange={setIsIntegrationDialogOpen}
+        urls={urls}
+        onSaveUrls={handleSaveUrls}
+      />
+    </div>
   );
 }

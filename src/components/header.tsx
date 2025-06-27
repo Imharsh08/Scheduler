@@ -1,18 +1,23 @@
 import React from 'react';
-import { Factory, Save, Loader2 } from 'lucide-react';
+import { Factory, Save, Loader2, Settings, Menu } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { SidebarTrigger } from '@/components/ui/sidebar';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 
 interface HeaderProps {
   onSave: () => void;
   isSaving: boolean;
+  onOpenIntegrationDialog: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ onSave, isSaving }) => {
+export const Header: React.FC<HeaderProps> = ({ onSave, isSaving, onOpenIntegrationDialog }) => {
   return (
     <header className="flex items-center justify-between p-4 border-b bg-card shadow-sm">
       <div className="flex items-center gap-3">
-        <SidebarTrigger />
         <Factory className="w-8 h-8 text-primary" />
         <h1 className="text-2xl font-bold text-foreground font-headline">
           ProSched
@@ -27,6 +32,20 @@ export const Header: React.FC<HeaderProps> = ({ onSave, isSaving }) => {
             )}
             {isSaving ? 'Saving...' : 'Save Schedule'}
         </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="icon">
+              <Menu className="h-5 w-5" />
+              <span className="sr-only">Open menu</span>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={onOpenIntegrationDialog}>
+              <Settings className="mr-2 h-4 w-4" />
+              <span>Integrations</span>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </header>
   );
