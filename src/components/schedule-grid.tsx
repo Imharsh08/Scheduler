@@ -1,3 +1,4 @@
+
 import React from 'react';
 import type { Shift, Schedule } from '@/types';
 import { ShiftSlot } from './shift-slot';
@@ -6,11 +7,12 @@ interface ScheduleGridProps {
   shifts: Shift[];
   schedule: Schedule;
   onDrop: (e: React.DragEvent<HTMLDivElement>, shiftId: string) => void;
+  pressColors: Record<number, string>;
 }
 
 const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
-export const ScheduleGrid: React.FC<ScheduleGridProps> = ({ shifts, schedule, onDrop }) => {
+export const ScheduleGrid: React.FC<ScheduleGridProps> = ({ shifts, schedule, onDrop, pressColors }) => {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-4 min-w-max h-full">
       {daysOfWeek.map(day => (
@@ -25,6 +27,7 @@ export const ScheduleGrid: React.FC<ScheduleGridProps> = ({ shifts, schedule, on
                   shift={shift}
                   scheduledTasks={schedule[shift.id] || []}
                   onDrop={onDrop}
+                  pressColors={pressColors}
                 />
               ))}
           </div>

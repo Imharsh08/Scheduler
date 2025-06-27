@@ -1,10 +1,12 @@
+
 import React from 'react';
-import { Factory, Save, Loader2, Settings, Menu } from 'lucide-react';
+import { Factory, Save, Loader2, Settings, Menu, Palette } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 
@@ -12,9 +14,10 @@ interface HeaderProps {
   onSave: () => void;
   isSaving: boolean;
   onOpenIntegrationDialog: () => void;
+  onOpenColorSettingsDialog: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ onSave, isSaving, onOpenIntegrationDialog }) => {
+export const Header: React.FC<HeaderProps> = ({ onSave, isSaving, onOpenIntegrationDialog, onOpenColorSettingsDialog }) => {
   return (
     <header className="flex items-center justify-between p-4 border-b bg-card shadow-sm">
       <div className="flex items-center gap-3">
@@ -43,6 +46,11 @@ export const Header: React.FC<HeaderProps> = ({ onSave, isSaving, onOpenIntegrat
             <DropdownMenuItem onClick={onOpenIntegrationDialog}>
               <Settings className="mr-2 h-4 w-4" />
               <span>Integrations</span>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={onOpenColorSettingsDialog}>
+              <Palette className="mr-2 h-4 w-4" />
+              <span>Color Settings</span>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

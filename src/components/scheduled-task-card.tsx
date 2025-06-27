@@ -1,16 +1,20 @@
+
 import React from 'react';
 import type { ScheduledTask } from '@/types';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { CheckCircle, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { getPressColorClass } from '@/lib/color-utils';
 
 interface ScheduledTaskCardProps {
   task: ScheduledTask;
-  colorClass: string;
+  pressColors: Record<number, string>;
 }
 
-export const ScheduledTaskCard: React.FC<ScheduledTaskCardProps> = ({ task, colorClass }) => {
+export const ScheduledTaskCard: React.FC<ScheduledTaskCardProps> = ({ task, pressColors }) => {
+  const colorClass = getPressColorClass(task.pressNo, pressColors);
+
   return (
     <Card className={cn("shadow-sm border", colorClass)}>
       <CardContent className="p-3">

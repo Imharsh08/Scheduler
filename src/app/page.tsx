@@ -12,6 +12,7 @@ import { initialShifts, initialProductionConditions, initialTasks } from '@/lib/
 import type { Task, Shift, Schedule, ProductionCondition, ScheduledTask, ValidationRequest, IntegrationUrls } from '@/types';
 import { useToast } from "@/hooks/use-toast";
 import { IntegrationDialog } from '@/components/integration-dialog';
+import { ColorSettingsDialog } from '@/components/color-settings-dialog';
 
 export default function Home() {
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
@@ -33,6 +34,8 @@ export default function Home() {
   });
 
   const [isIntegrationDialogOpen, setIsIntegrationDialogOpen] = useState(false);
+  const [isColorSettingsDialogOpen, setIsColorSettingsDialogOpen] = useState(false);
+  const [pressColors, setPressColors] = useState<Record<number, string>>({});
 
   useEffect(() => {
     try {
@@ -42,8 +45,13 @@ export default function Home() {
       } else {
         setIsIntegrationDialogOpen(true);
       }
+
+      const savedColors = localStorage.getItem('pressColors');
+      if (savedColors) {
+        setPressColors(JSON.parse(savedColors));
+      }
     } catch (error) {
-      console.error("Failed to load URLs from localStorage", error);
+      console.error("Failed to load data from localStorage", error);
     }
   }, []);
 
@@ -118,6 +126,24 @@ export default function Home() {
       toast({
         title: "Error Saving Links",
         description: "Could not save links to your browser's local storage.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleSavePressColors = (newColors: Record<number, string>) => {
+    setPressColors(newColors);
+    try {
+      localStorage.setItem('pressColors', JSON.stringify(newColors));
+      toast({
+        title: "Colors Saved",
+        description: "Your press color settings have been updated.",
+      });
+    } catch (error) {
+      console.error("Failed to save colors to localStorage", error);
+      toast({
+        title: "Error Saving Colors",
+        description: "Could not save color settings to your browser's local storage.",
         variant: "destructive",
       });
     }
@@ -369,6 +395,7 @@ export default function Home() {
         onSave={handleSaveSchedule}
         isSaving={isSaving}
         onOpenIntegrationDialog={() => setIsIntegrationDialogOpen(true)}
+        onOpenColorSettingsDialog={() => setIsColorSettingsDialogOpen(true)}
       />
       <main className="flex-1 flex flex-col gap-4 p-4 lg:p-6 overflow-hidden">
         <PressWorkloadPanel
@@ -397,6 +424,7 @@ export default function Home() {
                 shifts={shifts}
                 schedule={schedule}
                 onDrop={handleDrop}
+                pressColors={pressColors}
               />
             </div>
         </div>
@@ -416,6 +444,13 @@ export default function Home() {
         urls={urls}
         onSaveUrls={handleSaveUrls}
         onLoadFromSheet={handleLoadUrlsFromSheet}
+      />
+      <ColorSettingsDialog
+        open={isColorSettingsDialogOpen}
+        onOpenChange={setIsColorSettingsDialogOpen}
+        productionConditions={productionConditions}
+        pressColors={pressColors}
+        onSave={handleSavePressColors}
       />
     </div>
   );
