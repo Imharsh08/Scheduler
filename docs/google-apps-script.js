@@ -1,14 +1,21 @@
-
 /**
  * Google Apps Script for ProSched Application
  *
+ * This script is designed to work with your existing "FMS 2" sheet headers.
+ * It will map your columns to the data structure needed by the ProSched app.
+ *
  * How to use:
- * 1. Open a Google Sheet that will store your task data.
+ * 1. Open your Google Sheet that contains the "FMS 2" data.
  * 2. Go to Extensions > Apps Script.
  * 3. Paste this entire script into the editor, replacing any default code.
- * 4. Create two sheets in your Google Sheet: "FMS 2" and "Molding Sheet".
- * 5. In the "FMS 2" sheet, add the following headers in the first row:
- *    jobCardNumber, orderedQuantity, itemCode, material, isPriority, creationDate
+ * 4. Ensure your "FMS 2" sheet has the following headers (case-sensitive):
+ *    - Date
+ *    - Job Card No.
+ *    - Order qty
+ *    - Type_Model_MOC code
+ *    - MOC
+ *    - Emergency PO
+ * 5. Create another (or ensure you have a) sheet named "Molding Sheet". It will be used for saving data later.
  * 6. Click "Deploy" > "New deployment".
  * 7. For "Select type", choose "Web app".
  * 8. In "Configuration", give it a description (e.g., "ProSched API").
@@ -18,6 +25,19 @@
  * 12. Copy the provided "Web app URL".
  * 13. Paste this URL into the "Unscheduled Tasks" panel in the ProSched application and click "Load".
  */
+
+// --- Column Header Configuration ---
+// This section maps the headers from your sheet to the fields the app expects.
+const HEADER_MAPPING = {
+  jobCardNumber: 'Job Card No.',
+  orderedQuantity: 'Order qty',
+  itemCode: 'Type_Model_MOC code',
+  material: 'MOC',
+  isPriority: 'Emergency PO',
+  creationDate: 'Date'
+};
+// --- End Configuration ---
+
 
 /**
  * Handles GET requests to the web app. Fetches all tasks from the "FMS 2" sheet.
@@ -41,21 +61,38 @@ function doGet(e) {
 
     var headers = data.shift(); // Get headers and remove them from data
     
+    // Find the column index for each required header
+    var headerIndices = {};
+    for (var key in HEADER_MAPPING) {
+      var headerName = HEADER_MAPPING[key];
+      var index = headers.indexOf(headerName);
+      if (index === -1) {
+        return createJsonResponse({ error: "Required header not found in 'FMS 2' sheet: " + headerName });
+      }
+      headerIndices[key] = index;
+    }
+    
     var tasks = data.map(function(row) {
       var task = {};
-      headers.forEach(function(header, i) {
-        if (!header) return; // Skip empty header columns
+      
+      // Build the task object using the mapped indices
+      for (var key in headerIndices) {
+        var index = headerIndices[key];
+        var value = row[index];
         
-        let value = row[i];
-        if (header === 'creationDate' && value instanceof Date) {
-          task[header] = value.toISOString();
-        } else if (header === 'isPriority') {
-           task[header] = (value === true || String(value).toUpperCase() === 'TRUE');
+        if (key === 'creationDate' && value instanceof Date) {
+          task[key] = value.toISOString();
+        } else if (key === 'isPriority') {
+           // Treat non-empty/TRUE values in 'Emergency PO' as priority
+           task[key] = (value === true || String(value).toUpperCase() === 'TRUE' || value !== '');
         } else {
-          task[header] = value;
+          task[key] = value;
         }
-      });
+      }
       return task;
+    }).filter(function(task) {
+      // Ensure we only return tasks that have a job card number
+      return task.jobCardNumber && String(task.jobCardNumber).trim() !== '';
     });
     
     return createJsonResponse(tasks);
