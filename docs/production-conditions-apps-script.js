@@ -15,7 +15,7 @@
  *    - Press No
  *    - Die No
  *    - MOC
- *    - cycle time
+ *    - cycle time (in seconds)
  *    - cycle time 1 side operation
  *    - cycle time 2 side operation
  * 6. Click "Deploy" > "New deployment".
@@ -35,7 +35,7 @@ const HEADER_MAPPING = {
   pressNo: 'Press No',
   dieNo: 'Die No',
   material: 'MOC',
-  cureTime: 'cycle time', // Using 'cycle time' for time calculations as requested
+  cureTime: 'cycle time', // Assumed to be in SECONDS
   piecesPerCycle1: 'cycle time 1 side operation',
   piecesPerCycle2: 'cycle time 2 side operation',
 };
@@ -102,13 +102,22 @@ function doGet(e) {
       var side2 = getNumberFromRow('piecesPerCycle2');
       var totalPieces = side1 + side2;
 
+      // If side operations are not specified, assume at least 1 piece per cycle.
+      if (totalPieces === 0) {
+        totalPieces = 1;
+      }
+
+      var cureTimeInSeconds = getNumberFromRow('cureTime');
+      // Convert cure time from seconds to minutes, rounding up.
+      var cureTimeInMinutes = Math.ceil(cureTimeInSeconds / 60);
+
       // Build the condition object
       var condition = {
         itemCode: row[headerIndices.itemCode],
         pressNo: getNumberFromRow('pressNo'),
         dieNo: getNumberFromRow('dieNo'),
         material: row[headerIndices.material],
-        cureTime: getNumberFromRow('cureTime'),
+        cureTime: cureTimeInMinutes,
         piecesPerCycle: totalPieces,
       };
       
