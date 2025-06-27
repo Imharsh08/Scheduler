@@ -168,13 +168,11 @@ function doPost(e) {
 }
 
 /**
- * Helper function to create a JSON response with correct headers for CORS.
+ * Helper function to create a JSON response.
  * @param {object} data The data to stringify.
  * @returns {ContentService.TextOutput} The JSON response object.
  */
 function createJsonResponse(data) {
   return ContentService.createTextOutput(JSON.stringify(data))
-    .setMimeType(ContentService.MimeType.JSON)
-    .setHeader('Access-Control-Allow-Origin', '*') // Important for CORS
-    .setHeader('X-Content-Type-Options', 'nosniff');
+    .setMimeType(ContentService.MimeType.JSON);
 }
