@@ -19,12 +19,12 @@ export async function GET(request: NextRequest) {
 
     const text = await response.text();
     
+    // This block now handles non-ok statuses, including the 401 we will send below.
     if (!response.ok) {
-        console.error('Error from Google Apps Script:', text);
-        // Try to parse as JSON for a structured error, otherwise return the text
+        console.error('Error from Google Apps Script or Proxy:', text);
         try {
             const errorJson = JSON.parse(text);
-            return NextResponse.json({ error: `Failed to fetch from Google Sheet. Status: ${response.status}`, details: errorJson.error || text }, { status: response.status });
+            return NextResponse.json({ error: errorJson.error || `Failed to fetch from Google Sheet. Status: ${response.status}`, details: errorJson.details || text }, { status: response.status });
         } catch (e) {
             return NextResponse.json({ error: `Failed to fetch from Google Sheet. Status: ${response.status}`, details: text }, { status: response.status });
         }
@@ -36,6 +36,18 @@ export async function GET(request: NextRequest) {
         return NextResponse.json(data);
     } catch (error) {
         console.error('JSON parsing error:', error);
+        
+        // Check if the response looks like an HTML login page, a common issue with Apps Script permissions.
+        if (text.trim().toLowerCase().startsWith('<!doctype html>')) {
+             return NextResponse.json(
+                { 
+                    error: 'Authentication Error', 
+                    details: 'Received a login page instead of data. Please ensure your Google Apps Script is deployed with "Who has access" set to "Anyone".' 
+                }, 
+                { status: 401 } // Use 401 Unauthorized, which will be caught by the client.
+            );
+        }
+        
         return NextResponse.json({ error: 'Failed to parse the response from Google Sheet. The response was not valid JSON.', details: text.substring(0, 500) + '...' }, { status: 500 });
     }
 

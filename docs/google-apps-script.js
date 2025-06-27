@@ -27,6 +27,16 @@
  * 11. Authorize the script when prompted.
  * 12. Copy the provided "Web app URL".
  * 13. Paste this URL into the "Unscheduled Tasks" panel in the ProSched application and click "Load".
+ *
+ * --- TROUBLESHOOTING ---
+ * If you see an "Authentication Error" or a message about a login page, it means the script
+ * is not publicly accessible. Please re-check your deployment settings:
+ * - In the deployment configuration, "Execute as" should be "Me".
+ * - "Who has access" MUST be set to "Anyone".
+ *
+ * If you change these settings, you must create a new deployment version by going to
+ * "Deploy" > "Manage Deployments", editing your deployment, and selecting "New version". Then
+ * click "Deploy" to apply the changes. The URL will remain the same.
  */
 
 // --- Column Header Configuration ---
