@@ -437,7 +437,6 @@ export default function Home() {
               />
               <ProductionConditionsPanel
                 productionConditions={productionConditions}
-                onLoadConditions={handleLoadProductionConditions}
                 isLoading={isLoadingConditions}
               />
             </div>

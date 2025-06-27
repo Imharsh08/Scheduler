@@ -2,17 +2,15 @@
 import React from 'react';
 import type { ProductionCondition } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Settings, Download, Loader2 } from 'lucide-react';
+import { Settings, Loader2 } from 'lucide-react';
 
 interface ProductionConditionsPanelProps {
   productionConditions: ProductionCondition[];
-  onLoadConditions: () => void;
   isLoading: boolean;
 }
 
-export const ProductionConditionsPanel: React.FC<ProductionConditionsPanelProps> = ({ productionConditions, onLoadConditions, isLoading }) => {
+export const ProductionConditionsPanel: React.FC<ProductionConditionsPanelProps> = ({ productionConditions, isLoading }) => {
 
   return (
     <Card className="shadow-lg">
@@ -22,10 +20,6 @@ export const ProductionConditionsPanel: React.FC<ProductionConditionsPanelProps>
             <Settings className="w-6 h-6" />
             <CardTitle className="font-headline">Production Conditions</CardTitle>
           </div>
-           <Button onClick={onLoadConditions} disabled={isLoading} size="sm">
-            {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
-            Load
-          </Button>
         </div>
       </CardHeader>
       <CardContent>
