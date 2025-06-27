@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -6,26 +7,29 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Loader2, AlertCircle, ArrowLeft } from 'lucide-react';
+import { Loader2, AlertCircle, ArrowLeft, Calendar, Clock } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import type { ValidationRequest, ProductionCondition, ScheduledTask, Task, Shift } from '@/types';
 import { validatePressDieCombination, type ValidatePressDieCombinationOutput } from '@/ai/flows/validate-press-die-combination';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface ValidationDialogProps {
   request: ValidationRequest;
   productionConditions: ProductionCondition[];
+  shifts: Shift[];
   onClose: () => void;
-  onSuccess: (scheduledTaskDetails: Omit<ScheduledTask, 'id'>, task: Task, shift: Shift) => void;
+  onSuccess: (scheduledItems: Omit<ScheduledTask, 'id'>[]) => void;
 }
 
-export const ValidationDialog: React.FC<ValidationDialogProps> = ({ request, productionConditions, onClose, onSuccess }) => {
+export const ValidationDialog: React.FC<ValidationDialogProps> = ({ request, productionConditions, shifts, onClose, onSuccess }) => {
   const { task, shift } = request;
   const { toast } = useToast();
   
-  const [step, setStep] = useState<'details' | 'select_operation' | 'confirm'>('details');
+  const [step, setStep] = useState<'details' | 'select_operation' | 'confirm' | 'multi_shift_confirm'>('details');
 
   const [pressNo, setPressNo] = useState('');
   const [otherPressNo, setOtherPressNo] = useState('');
@@ -37,11 +41,13 @@ export const ValidationDialog: React.FC<ValidationDialogProps> = ({ request, pro
   const [validationResult, setValidationResult] = useState<ValidatePressDieCombinationOutput | null>(null);
 
   const [selectedCondition, setSelectedCondition] = useState<ProductionCondition | null>(null);
-  const [operationType, setOperationType] = useState(''); // '1' for one-side, '2' for two-side
+  const [operationType, setOperationType] = useState('');
   const [piecesPerCycle, setPiecesPerCycle] = useState(0);
 
   const [scheduledQuantity, setScheduledQuantity] = useState('');
   const [maxPossibleQty, setMaxPossibleQty] = useState(0);
+  
+  const [multiShiftPlan, setMultiShiftPlan] = useState<Omit<ScheduledTask, 'id'>[] | null>(null);
 
   const pressOptions = React.useMemo(() => {
     const presses = productionConditions
@@ -165,36 +171,90 @@ export const ValidationDialog: React.FC<ValidationDialogProps> = ({ request, pro
         return;
     }
 
-    const maxCyclesInShift = Math.floor(shift.remainingCapacity / selectedCondition.cureTime);
-    if (maxCyclesInShift <= 0) {
-        toast({ title: "Not Enough Capacity", description: "Not enough remaining capacity in this shift for even one cycle.", variant: "destructive" });
-        return;
-    }
-    
-    const maxProducibleQty = maxCyclesInShift * currentPcsPerCycle;
-    const qty = Math.min(task.remainingQuantity, maxProducibleQty);
-          
-    if (isNaN(qty)) {
-        toast({ title: "Calculation Error", description: "Could not calculate a valid quantity. Check the task and production data.", variant: "destructive" });
-        return;
-    }
-
+    const qty = task.remainingQuantity;
     setMaxPossibleQty(qty);
     setScheduledQuantity(String(qty));
     setStep('confirm');
   }
 
-  const handleConfirm = () => {
-    if (!selectedCondition || !scheduledQuantity) return;
-    
-    const qty = parseInt(scheduledQuantity, 10);
-    const calculatedCycles = Math.ceil(qty / piecesPerCycle);
-    const timeTaken = calculatedCycles * selectedCondition.cureTime;
+  const handleCalculateMultiShift = () => {
+    if (!selectedCondition) return;
 
     const finalPressNo = parseInt(pressNo === 'other' ? otherPressNo : pressNo, 10);
     const finalDieNo = parseInt(dieNo === 'other' ? otherDieNo : dieNo, 10);
     
-    const newScheduledTaskDetails: Omit<ScheduledTask, 'id'> = {
+    let remainingQtyToSchedule = parseInt(scheduledQuantity, 10);
+    const plan: Omit<ScheduledTask, 'id'>[] = [];
+
+    const startIndex = shifts.findIndex(s => s.id === shift.id);
+    if (startIndex === -1) {
+        toast({ title: "Error", description: "Could not find starting shift.", variant: "destructive" });
+        return;
+    }
+    
+    const availableShifts = JSON.parse(JSON.stringify(shifts.slice(startIndex)));
+    
+    for (const currentShift of availableShifts) {
+        if (remainingQtyToSchedule <= 0) break;
+        if (currentShift.remainingCapacity <= 0) continue;
+
+        const maxCycles = Math.floor(currentShift.remainingCapacity / selectedCondition.cureTime);
+        if (maxCycles <= 0) continue;
+
+        const producibleQty = maxCycles * piecesPerCycle;
+        const qtyForThisShift = Math.min(producibleQty, remainingQtyToSchedule);
+
+        if (qtyForThisShift <= 0) continue;
+        
+        const cyclesForThisShift = Math.ceil(qtyForThisShift / piecesPerCycle);
+        const timeForThisShift = cyclesForThisShift * selectedCondition.cureTime;
+
+        plan.push({
+            jobCardNumber: task.jobCardNumber,
+            itemCode: task.itemCode,
+            material: task.material,
+            scheduledQuantity: qtyForThisShift,
+            pressNo: finalPressNo,
+            dieNo: finalDieNo,
+            timeTaken: timeForThisShift,
+            shiftId: currentShift.id,
+        });
+
+        remainingQtyToSchedule -= qtyForThisShift;
+        currentShift.remainingCapacity -= timeForThisShift;
+    }
+
+    if (remainingQtyToSchedule > 0) {
+        toast({
+            title: "Insufficient Capacity",
+            description: `Cannot schedule the full quantity. Not enough capacity in all available future shifts. ${remainingQtyToSchedule} pieces remaining.`,
+            variant: "destructive"
+        });
+        setMultiShiftPlan(null);
+    } else {
+        setMultiShiftPlan(plan);
+        setStep('multi_shift_confirm');
+    }
+  };
+
+  const handleSingleShiftConfirm = () => {
+    if (!selectedCondition || !scheduledQuantity) return;
+    
+    const qty = parseInt(scheduledQuantity, 10);
+    if(qty <= 0) return;
+
+    const calculatedCycles = Math.ceil(qty / piecesPerCycle);
+    const timeTaken = calculatedCycles * selectedCondition.cureTime;
+
+    if (timeTaken > shift.remainingCapacity) {
+        toast({ title: "Exceeds Capacity", description: "This quantity takes more time than available in the shift.", variant: "destructive" });
+        return;
+    }
+
+    const finalPressNo = parseInt(pressNo === 'other' ? otherPressNo : pressNo, 10);
+    const finalDieNo = parseInt(dieNo === 'other' ? otherDieNo : dieNo, 10);
+    
+    const newScheduledTask: Omit<ScheduledTask, 'id'> = {
       jobCardNumber: task.jobCardNumber,
       itemCode: task.itemCode,
       material: task.material,
@@ -202,28 +262,33 @@ export const ValidationDialog: React.FC<ValidationDialogProps> = ({ request, pro
       pressNo: finalPressNo,
       dieNo: finalDieNo,
       timeTaken: timeTaken,
+      shiftId: shift.id,
     };
-    onSuccess(newScheduledTaskDetails, task, shift);
+    onSuccess([newScheduledTask]);
   };
   
+  const handleMultiShiftConfirm = () => {
+    if (multiShiftPlan) {
+        onSuccess(multiShiftPlan);
+    }
+  }
+
   const handleQuantityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
-
-    if (value === '') {
-      setScheduledQuantity('');
-      return;
-    }
-
-    if (/^\d*$/.test(value)) {
-      const numValue = parseInt(value, 10);
-      if (numValue > maxPossibleQty) {
-          setScheduledQuantity(String(maxPossibleQty));
-          toast({ title: "Quantity Exceeded", description: `Maximum possible quantity is ${maxPossibleQty}.`, variant: "destructive" });
-      } else {
-          setScheduledQuantity(value);
-      }
+     if (value === '' || /^\d*$/.test(value)) {
+        setScheduledQuantity(value);
     }
   };
+
+  const handleQuantityBlur = () => {
+    const numValue = parseInt(scheduledQuantity, 10);
+    if (isNaN(numValue) || numValue <= 0) {
+        setScheduledQuantity('1');
+    } else if (numValue > maxPossibleQty) {
+        setScheduledQuantity(String(maxPossibleQty));
+        toast({ title: "Quantity Exceeded", description: `Maximum possible quantity is ${maxPossibleQty}.`, variant: "destructive" });
+    }
+  }
 
   const getDialogDescription = () => {
     switch(step) {
@@ -232,7 +297,9 @@ export const ValidationDialog: React.FC<ValidationDialogProps> = ({ request, pro
       case 'select_operation':
         return 'This combination is valid. Please select the type of operation to perform.';
       case 'confirm':
-        return `Confirm the quantity to schedule. Max possible is ${maxPossibleQty}.`;
+        return `Confirm the quantity to schedule. You can schedule up to ${maxPossibleQty} pieces.`;
+      case 'multi_shift_confirm':
+        return 'Review the proposed schedule plan across multiple upcoming shifts.';
       default:
         return '';
     }
@@ -244,58 +311,103 @@ export const ValidationDialog: React.FC<ValidationDialogProps> = ({ request, pro
     const scheduledQtyNum = parseInt(scheduledQuantity, 10) || 0;
     const calculatedCycles = piecesPerCycle > 0 ? Math.ceil(scheduledQtyNum / piecesPerCycle) : 0;
     const timeTaken = calculatedCycles * selectedCondition.cureTime;
+    const fitsInSingleShift = timeTaken <= shift.remainingCapacity;
 
     return (
       <div>
         <div className="grid gap-6 py-4">
           <div className="grid grid-cols-3 items-center gap-4">
               <Label htmlFor="quantity" className="text-right">Schedule Qty</Label>
-              <Input id="quantity" type="number" value={scheduledQuantity} onChange={handleQuantityChange} className="col-span-2" max={maxPossibleQty} />
-          </div>
-
-          <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-            <div className="text-muted-foreground">Remaining in Job:</div>
-            <div className="font-medium text-right">{task.remainingQuantity} pcs</div>
-            
-            <div className="text-muted-foreground">Shift Capacity Left:</div>
-            <div className="font-medium text-right">{shift.remainingCapacity} min</div>
+              <Input id="quantity" type="text" value={scheduledQuantity} onChange={handleQuantityChange} onBlur={handleQuantityBlur} className="col-span-2" />
           </div>
           
           <Card className="bg-secondary/50">
             <CardContent className="p-3">
               <h4 className="text-sm font-semibold mb-2 text-center">Calculation Details</h4>
               <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                 <div className="text-muted-foreground">Total Remaining Job:</div>
+                <div className="font-medium text-right">{task.remainingQuantity} pcs</div>
+                <div className="text-muted-foreground">Shift Capacity Left:</div>
+                <div className="font-medium text-right">{shift.remainingCapacity} min</div>
+                <Separator className="col-span-2 my-1" />
                 <div className="text-muted-foreground">Pieces / Cycle:</div>
                 <div className="font-mono text-right">{piecesPerCycle}</div>
-
                 <div className="text-muted-foreground">Time / Cycle:</div>
                 <div className="font-mono text-right">{selectedCondition.cureTime} min</div>
-
                 <div className="text-muted-foreground">Calculated Cycles:</div>
                 <div className="font-mono text-right">{calculatedCycles}</div>
               </div>
               <Separator className="my-2 bg-border/50" />
               <div className="flex justify-between items-center text-sm font-bold">
                   <span>Total Time Required:</span>
-                  <span>{timeTaken} min</span>
+                  <span className={!fitsInSingleShift ? 'text-destructive' : ''}>{timeTaken} min</span>
               </div>
             </CardContent>
           </Card>
         </div>
-        <DialogFooter className="mt-4">
+        <DialogFooter className="mt-4 sm:justify-between">
           <Button type="button" variant="ghost" onClick={() => setStep('select_operation')}>
               <ArrowLeft className="mr-2 h-4 w-4" /> Back
           </Button>
-          <Button type="button" onClick={handleConfirm} disabled={!scheduledQuantity || parseInt(scheduledQuantity, 10) <= 0 || timeTaken > shift.remainingCapacity}>
-            Confirm Schedule
-          </Button>
+          <div className="flex gap-2">
+            {fitsInSingleShift ? (
+              <Button type="button" onClick={handleSingleShiftConfirm} disabled={scheduledQtyNum <= 0}>
+                Confirm Schedule
+              </Button>
+            ) : (
+              <Button type="button" onClick={handleCalculateMultiShift} disabled={scheduledQtyNum <= 0}>
+                <Calendar className="mr-2 h-4 w-4" /> Schedule Across Multiple Shifts
+              </Button>
+            )}
+          </div>
         </DialogFooter>
-        {timeTaken > shift.remainingCapacity && (
-            <p className="text-sm text-destructive text-center mt-2">Scheduled time exceeds remaining shift capacity.</p>
+         {!fitsInSingleShift && (
+            <p className="text-sm text-destructive text-center mt-2">Scheduled time exceeds remaining shift capacity. You can schedule across multiple shifts.</p>
         )}
       </div>
     );
   };
+  
+  const renderMultiShiftConfirmStep = () => {
+    if (!multiShiftPlan) return null;
+    return (
+        <div>
+            <div className="my-4">
+                <ScrollArea className="h-48">
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>Shift</TableHead>
+                            <TableHead className="text-right">Qty</TableHead>
+                            <TableHead className="text-right">Time</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {multiShiftPlan.map((item, index) => {
+                            const p_shift = shifts.find(s => s.id === item.shiftId);
+                            return (
+                                <TableRow key={index}>
+                                    <TableCell className="font-medium">{p_shift?.day} {p_shift?.type}</TableCell>
+                                    <TableCell className="text-right">{item.scheduledQuantity}</TableCell>
+                                    <TableCell className="text-right">{item.timeTaken} min</TableCell>
+                                </TableRow>
+                            )
+                        })}
+                    </TableBody>
+                </Table>
+                </ScrollArea>
+            </div>
+            <DialogFooter className="mt-4">
+              <Button type="button" variant="ghost" onClick={() => setStep('confirm')}>
+                  <ArrowLeft className="mr-2 h-4 w-4" /> Back
+              </Button>
+              <Button type="button" onClick={handleMultiShiftConfirm}>
+                Confirm Multi-Shift Schedule
+              </Button>
+            </DialogFooter>
+        </div>
+    );
+  }
 
 
   return (
@@ -387,6 +499,7 @@ export const ValidationDialog: React.FC<ValidationDialogProps> = ({ request, pro
         )}
 
         {step === 'confirm' && renderConfirmStep()}
+        {step === 'multi_shift_confirm' && renderMultiShiftConfirmStep()}
       </DialogContent>
     </Dialog>
   );

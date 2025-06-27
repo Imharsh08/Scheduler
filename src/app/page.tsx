@@ -206,27 +206,39 @@ export default function Home() {
 
 
   const handleValidationSuccess = (
-    scheduledTaskDetails: Omit<ScheduledTask, 'id' | 'shiftId'>,
-    task: Task,
-    shift: Shift
+    scheduledItems: Omit<ScheduledTask, 'id'>[],
   ) => {
-    const batchCount = Object.values(schedule)
+    if (!validationRequest) return;
+    const { task } = validationRequest;
+
+    let currentBatchCount = Object.values(schedule)
       .flat()
       .filter(st => st.jobCardNumber === task.jobCardNumber).length;
     
-    const batchSuffix = String.fromCharCode('A'.charCodeAt(0) + batchCount);
-    const newId = `${task.jobCardNumber}-${batchSuffix}`;
+    let totalQuantityScheduled = 0;
+    const scheduleUpdates = new Map<string, ScheduledTask[]>();
+    const shiftCapacityUpdates = new Map<string, number>();
 
-    const scheduledTask: ScheduledTask = {
-      ...scheduledTaskDetails,
-      id: newId,
-      shiftId: shift.id,
-    };
+    scheduledItems.forEach((item) => {
+      const batchSuffix = String.fromCharCode('A'.charCodeAt(0) + currentBatchCount);
+      const newId = `${item.jobCardNumber}-${batchSuffix}`;
+      currentBatchCount++;
+      
+      const scheduledTask: ScheduledTask = { ...item, id: newId };
+      totalQuantityScheduled += item.scheduledQuantity;
+
+      const currentShiftTasks = scheduleUpdates.get(item.shiftId) || [];
+      scheduleUpdates.set(item.shiftId, [...currentShiftTasks, scheduledTask]);
+
+      const timeUpdate = shiftCapacityUpdates.get(item.shiftId) || 0;
+      shiftCapacityUpdates.set(item.shiftId, timeUpdate + item.timeTaken);
+    });
 
     setSchedule((currentSchedule) => {
       const newSchedule = { ...currentSchedule };
-      const newShiftTasks = [...(newSchedule[shift.id] || []), scheduledTask];
-      newSchedule[shift.id] = newShiftTasks;
+      for (const [shiftId, tasksToAdd] of scheduleUpdates.entries()) {
+        newSchedule[shiftId] = [...(newSchedule[shiftId] || []), ...tasksToAdd];
+      }
       return newSchedule;
     });
 
@@ -234,18 +246,20 @@ export default function Home() {
       prevTasks
         .map((t) =>
           t.jobCardNumber === task.jobCardNumber
-            ? { ...t, remainingQuantity: t.remainingQuantity - scheduledTaskDetails.scheduledQuantity }
+            ? { ...t, remainingQuantity: t.remainingQuantity - totalQuantityScheduled }
             : t
         )
         .filter((t) => t.remainingQuantity > 0)
     );
 
     setShifts((prevShifts) =>
-      prevShifts.map((s) =>
-        s.id === shift.id
-          ? { ...s, remainingCapacity: s.remainingCapacity - scheduledTaskDetails.timeTaken }
-          : s
-      )
+      prevShifts.map((s) => {
+        const timeToDecrement = shiftCapacityUpdates.get(s.id);
+        if (timeToDecrement) {
+          return { ...s, remainingCapacity: s.remainingCapacity - timeToDecrement };
+        }
+        return s;
+      })
     );
     
     setValidationRequest(null);
@@ -289,6 +303,7 @@ export default function Home() {
         <ValidationDialog
           request={validationRequest}
           productionConditions={productionConditions}
+          shifts={shifts}
           onClose={() => setValidationRequest(null)}
           onSuccess={handleValidationSuccess}
         />
