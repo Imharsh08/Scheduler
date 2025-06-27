@@ -20,7 +20,7 @@ export const PressWorkloadCard: React.FC<PressWorkloadCardProps> = ({ workload, 
     <Card
       onClick={() => onClick(pressNo)}
       className={cn(
-          'cursor-pointer transition-all duration-200 hover:shadow-lg',
+          'cursor-pointer transition-all duration-200 hover:shadow-lg w-44 flex-shrink-0',
           isSelected ? 'border-primary ring-2 ring-primary' : 'hover:border-primary/50'
       )}
     >

@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Layers, X } from 'lucide-react';
 import { PressWorkloadCard } from './press-workload-card';
+import { ScrollArea, ScrollBar } from './ui/scroll-area';
 
 interface PressWorkloadPanelProps {
   tasks: Task[];
@@ -72,16 +73,19 @@ export const PressWorkloadPanel: React.FC<PressWorkloadPanelProps> = ({ tasks, s
       </CardHeader>
       <CardContent>
         {pressWorkloads.length > 0 ? (
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-[250px] overflow-y-auto pr-2">
-            {pressWorkloads.map(workload => (
-              <PressWorkloadCard
-                key={workload.pressNo}
-                workload={workload}
-                onClick={() => onPressSelect(workload.pressNo)}
-                isSelected={selectedPress === workload.pressNo}
-              />
-            ))}
-          </div>
+          <ScrollArea className="w-full whitespace-nowrap">
+            <div className="flex w-max space-x-4 pb-4">
+              {pressWorkloads.map(workload => (
+                <PressWorkloadCard
+                  key={workload.pressNo}
+                  workload={workload}
+                  onClick={() => onPressSelect(workload.pressNo)}
+                  isSelected={selectedPress === workload.pressNo}
+                />
+              ))}
+            </div>
+            <ScrollBar orientation="horizontal" />
+          </ScrollArea>
         ) : (
           <p className="text-muted-foreground text-center py-4">Load production conditions to see press workloads.</p>
         )}

@@ -370,33 +370,35 @@ export default function Home() {
         isSaving={isSaving}
         onOpenIntegrationDialog={() => setIsIntegrationDialogOpen(true)}
       />
-      <main className="flex-1 flex flex-col lg:flex-row gap-6 p-4 lg:p-6 overflow-hidden">
-        <div className="lg:w-1/3 flex flex-col gap-6 overflow-y-auto pr-2">
-          <PressWorkloadPanel
-            tasks={tasks}
-            schedule={schedule}
-            productionConditions={productionConditions}
-            onPressSelect={handlePressSelect}
-            selectedPress={selectedPress}
-          />
-          <TaskList
-            tasks={filteredTasks}
-            onDragStart={handleDragStart}
-            onLoadTasks={handleLoadTasks}
-            isLoading={isLoadingTasks}
-          />
-          <ProductionConditionsPanel
-            productionConditions={productionConditions}
-            onLoadConditions={handleLoadProductionConditions}
-            isLoading={isLoadingConditions}
-          />
-        </div>
-        <div className="lg:w-2/3 flex-1 overflow-x-auto">
-          <ScheduleGrid
-            shifts={shifts}
-            schedule={schedule}
-            onDrop={handleDrop}
-          />
+      <main className="flex-1 flex flex-col gap-4 p-4 lg:p-6 overflow-hidden">
+        <PressWorkloadPanel
+          tasks={tasks}
+          schedule={schedule}
+          productionConditions={productionConditions}
+          onPressSelect={handlePressSelect}
+          selectedPress={selectedPress}
+        />
+        <div className="flex-1 flex flex-col lg:flex-row gap-6 overflow-hidden">
+            <div className="lg:w-1/3 flex flex-col gap-6 overflow-y-auto pr-2">
+              <TaskList
+                tasks={filteredTasks}
+                onDragStart={handleDragStart}
+                onLoadTasks={handleLoadTasks}
+                isLoading={isLoadingTasks}
+              />
+              <ProductionConditionsPanel
+                productionConditions={productionConditions}
+                onLoadConditions={handleLoadProductionConditions}
+                isLoading={isLoadingConditions}
+              />
+            </div>
+            <div className="lg:w-2/3 flex-1 overflow-x-auto">
+              <ScheduleGrid
+                shifts={shifts}
+                schedule={schedule}
+                onDrop={handleDrop}
+              />
+            </div>
         </div>
       </main>
       {validationRequest && (
