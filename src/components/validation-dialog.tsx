@@ -36,7 +36,7 @@ export const ValidationDialog: React.FC<ValidationDialogProps> = ({ request, pro
 
   // State for confirmation step
   const [selectedCondition, setSelectedCondition] = useState<ProductionCondition | null>(null);
-  const [scheduledQuantity, setScheduledQuantity] = useState(0);
+  const [scheduledQuantity, setScheduledQuantity] = useState('');
   const [timeTaken, setTimeTaken] = useState(0);
   const [maxPossibleQty, setMaxPossibleQty] = useState(0);
 
@@ -68,10 +68,15 @@ export const ValidationDialog: React.FC<ValidationDialogProps> = ({ request, pro
 
   useEffect(() => {
     if (!selectedCondition) return;
-
-    const cyclesForScheduledQty = Math.ceil(scheduledQuantity / selectedCondition.piecesPerCycle);
-    const newTimeTaken = cyclesForScheduledQty * selectedCondition.cureTime;
-    setTimeTaken(newTimeTaken);
+    
+    const qty = parseInt(scheduledQuantity, 10) || 0;
+    if (selectedCondition.piecesPerCycle > 0) {
+      const cyclesForScheduledQty = Math.ceil(qty / selectedCondition.piecesPerCycle);
+      const newTimeTaken = cyclesForScheduledQty * selectedCondition.cureTime;
+      setTimeTaken(newTimeTaken);
+    } else {
+      setTimeTaken(0);
+    }
 
   }, [scheduledQuantity, selectedCondition]);
 
@@ -108,6 +113,11 @@ export const ValidationDialog: React.FC<ValidationDialogProps> = ({ request, pro
         const condition = productionConditions.find(pc => pc.itemCode === task.itemCode && pc.pressNo === press && pc.dieNo === die && pc.material === task.material);
 
         if (condition) {
+          if (condition.cureTime <= 0) {
+            setValidationResult({ isValid: false, reason: "Cannot schedule with a cure time of zero." });
+            setIsLoading(false);
+            return;
+          }
           const maxCyclesInShift = Math.floor(shift.remainingCapacity / condition.cureTime);
           if (maxCyclesInShift <= 0) {
             setValidationResult({ isValid: false, reason: "Not enough remaining capacity in this shift for even one cycle." });
@@ -118,7 +128,7 @@ export const ValidationDialog: React.FC<ValidationDialogProps> = ({ request, pro
           const qty = Math.min(task.remainingQuantity, maxProducibleQty);
           
           setMaxPossibleQty(qty);
-          setScheduledQuantity(qty);
+          setScheduledQuantity(String(qty));
           setSelectedCondition(condition);
           setStep('confirm');
         } else {
@@ -139,12 +149,12 @@ export const ValidationDialog: React.FC<ValidationDialogProps> = ({ request, pro
 
     const finalPressNo = parseInt(pressNo === 'other' ? otherPressNo : pressNo, 10);
     const finalDieNo = parseInt(dieNo === 'other' ? otherDieNo : dieNo, 10);
-
+    
     const newScheduledTaskDetails: Omit<ScheduledTask, 'id'> = {
       jobCardNumber: task.jobCardNumber,
       itemCode: task.itemCode,
       material: task.material,
-      scheduledQuantity: scheduledQuantity,
+      scheduledQuantity: parseInt(scheduledQuantity, 10) || 0,
       pressNo: finalPressNo,
       dieNo: finalDieNo,
       timeTaken: timeTaken,
@@ -153,14 +163,21 @@ export const ValidationDialog: React.FC<ValidationDialogProps> = ({ request, pro
   };
   
   const handleQuantityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = parseInt(e.target.value, 10);
-    if (isNaN(value)) {
-        setScheduledQuantity(0);
-    } else if (value > maxPossibleQty) {
-        setScheduledQuantity(maxPossibleQty);
-        toast({ title: "Quantity Exceeded", description: `Maximum possible quantity is ${maxPossibleQty}.`, variant: "destructive" });
-    } else {
-        setScheduledQuantity(value);
+    const value = e.target.value;
+
+    if (value === '') {
+      setScheduledQuantity('');
+      return;
+    }
+
+    if (/^\d*$/.test(value)) {
+      const numValue = parseInt(value, 10);
+      if (numValue > maxPossibleQty) {
+          setScheduledQuantity(String(maxPossibleQty));
+          toast({ title: "Quantity Exceeded", description: `Maximum possible quantity is ${maxPossibleQty}.`, variant: "destructive" });
+      } else {
+          setScheduledQuantity(value);
+      }
     }
   };
 
@@ -248,7 +265,7 @@ export const ValidationDialog: React.FC<ValidationDialogProps> = ({ request, pro
               <Button type="button" variant="ghost" onClick={() => setStep('details')}>
                   <ArrowLeft className="mr-2 h-4 w-4" /> Back
               </Button>
-              <Button type="button" onClick={handleConfirm} disabled={scheduledQuantity <= 0 || timeTaken > shift.remainingCapacity}>
+              <Button type="button" onClick={handleConfirm} disabled={!scheduledQuantity || parseInt(scheduledQuantity, 10) <= 0 || timeTaken > shift.remainingCapacity}>
                 Confirm Schedule
               </Button>
             </DialogFooter>
