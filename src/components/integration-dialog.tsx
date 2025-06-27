@@ -13,7 +13,7 @@ import { Separator } from '@/components/ui/separator';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Save } from 'lucide-react';
+import { Download, Loader2 } from 'lucide-react';
 import type { IntegrationUrls } from '@/types';
 
 interface IntegrationDialogProps {
@@ -21,71 +21,85 @@ interface IntegrationDialogProps {
   onOpenChange: (open: boolean) => void;
   urls: IntegrationUrls;
   onSaveUrls: (newUrls: IntegrationUrls) => void;
+  onLoadFromSheet: (configUrl: string) => Promise<IntegrationUrls | null>;
 }
 
-export const IntegrationDialog: React.FC<IntegrationDialogProps> = ({ open, onOpenChange, urls, onSaveUrls }) => {
-  const [localUrls, setLocalUrls] = useState<IntegrationUrls>(urls);
+export const IntegrationDialog: React.FC<IntegrationDialogProps> = ({
+  open,
+  onOpenChange,
+  urls,
+  onSaveUrls,
+  onLoadFromSheet,
+}) => {
+  const [configUrl, setConfigUrl] = useState(urls.config);
+  const [loadedUrls, setLoadedUrls] = useState(urls);
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    setLocalUrls(urls);
-  }, [urls]);
+    setConfigUrl(urls.config);
+    setLoadedUrls(urls);
+  }, [urls, open]);
 
-  const handleUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setLocalUrls((prev) => ({ ...prev, [name]: value }));
+  const handleLoad = async () => {
+    setIsLoading(true);
+    const result = await onLoadFromSheet(configUrl);
+    if (result) {
+      setLoadedUrls(result);
+      onOpenChange(false);
+    }
+    setIsLoading(false);
   };
-
-  const handleSave = () => {
-    onSaveUrls(localUrls);
-    onOpenChange(false); // Close dialog on save
-  };
-
+  
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle className="font-headline">Integrations</DialogTitle>
           <DialogDescription>
-            Manage your Google Sheet links here. These are saved in your browser.
+            Load your integration links from a central Google Sheet. This is saved in your browser.
           </DialogDescription>
         </DialogHeader>
-        <Separator />
+        
         <div className="space-y-4 py-4">
           <div className="space-y-2">
-            <Label htmlFor="tasks">Unscheduled Tasks URL</Label>
-            <Input
-              id="tasks"
-              name="tasks"
-              placeholder="FMS 2 Sheet URL"
-              value={localUrls.tasks}
-              onChange={handleUrlChange}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="conditions">Production Conditions URL</Label>
-            <Input
-              id="conditions"
-              name="conditions"
-              placeholder="Manufacturing Details URL"
-              value={localUrls.conditions}
-              onChange={handleUrlChange}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="save">Save Schedule URL</Label>
-            <Input
-              id="save"
-              name="save"
-              placeholder="Molding Sheet URL"
-              value={localUrls.save}
-              onChange={handleUrlChange}
-            />
+            <Label htmlFor="config">Configuration URL</Label>
+            <div className="flex gap-2">
+              <Input
+                id="config"
+                name="config"
+                placeholder="Google Apps Script URL for 'Web Url' sheet"
+                value={configUrl}
+                onChange={(e) => setConfigUrl(e.target.value)}
+              />
+              <Button onClick={handleLoad} disabled={isLoading || !configUrl}>
+                {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                Load
+              </Button>
+            </div>
           </div>
         </div>
+
+        <Separator />
+
+        <div className="space-y-4 pt-4">
+            <h4 className="text-sm font-medium text-muted-foreground">Loaded Links</h4>
+             <div className="space-y-2">
+                <Label htmlFor="tasks">Unscheduled Tasks URL</Label>
+                <Input id="tasks" value={loadedUrls.tasks} readOnly placeholder="Load from config..."/>
+             </div>
+             <div className="space-y-2">
+                <Label htmlFor="conditions">Production Conditions URL</Label>
+                <Input id="conditions" value={loadedUrls.conditions} readOnly placeholder="Load from config..."/>
+             </div>
+             <div className="space-y-2">
+                <Label htmlFor="save">Save Schedule URL</Label>
+                <Input id="save" value={loadedUrls.save} readOnly placeholder="Load from config..."/>
+             </div>
+        </div>
+        
         <DialogFooter>
-          <Button onClick={handleSave} className="w-full">
-            <Save className="mr-2 h-4 w-4" />
-            Save Links
+          <Button onClick={() => onOpenChange(false)} variant="outline">
+            Close
           </Button>
         </DialogFooter>
       </DialogContent>

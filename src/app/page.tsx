@@ -26,6 +26,7 @@ export default function Home() {
   const { toast } = useToast();
 
   const [urls, setUrls] = useState<IntegrationUrls>({
+    config: '',
     tasks: '',
     conditions: '',
     save: '',
@@ -46,14 +47,56 @@ export default function Home() {
     }
   }, []);
 
+  const handleLoadUrlsFromSheet = async (configUrl: string) => {
+    if (!configUrl) {
+      toast({ title: "URL Required", description: "Please enter the Configuration URL.", variant: "destructive" });
+      return;
+    }
+    try {
+      const proxyUrl = `/api/tasks?url=${encodeURIComponent(configUrl)}`;
+      const response = await fetch(proxyUrl);
+      const data = await response.json();
+      
+      if (!response.ok) throw new Error(data.details || data.error || 'Failed to fetch configuration.');
+      if (data.error) throw new Error(data.error);
+      
+      const newUrls: IntegrationUrls = {
+        config: configUrl,
+        tasks: data.tasks || '',
+        conditions: data.conditions || '',
+        save: data.save || ''
+      };
+
+      handleSaveUrls(newUrls);
+      toast({
+        title: "Configuration Loaded",
+        description: "Successfully loaded and saved new integration links.",
+      });
+
+      return newUrls;
+
+    } catch (error) {
+       console.error("Failed to load URLs from sheet:", error);
+      const description = error instanceof Error ? error.message : "Could not fetch configuration. Check the URL and try again.";
+      toast({
+        title: "Error Loading Configuration",
+        description: description,
+        variant: "destructive",
+      });
+      return null;
+    }
+  };
+
   const handleSaveUrls = (newUrls: IntegrationUrls) => {
     setUrls(newUrls);
     try {
       localStorage.setItem('integrationUrls', JSON.stringify(newUrls));
-      toast({
-        title: "Links Saved",
-        description: "Your integration links have been saved successfully.",
-      });
+      if(newUrls.config){ // Only show toast if it's not the initial blank save
+         toast({
+          title: "Links Saved",
+          description: "Your integration links have been saved successfully.",
+        });
+      }
     } catch (error) {
       console.error("Failed to save URLs to localStorage", error);
       toast({
@@ -67,8 +110,8 @@ export default function Home() {
   const handleLoadTasks = async () => {
     if (!urls.tasks) {
       toast({
-        title: "URL Required",
-        description: "Please set the 'Unscheduled Tasks URL' in the sidebar.",
+        title: "Task URL Not Set",
+        description: "Please set your Configuration URL and load the links first.",
         variant: "destructive",
       });
       return;
@@ -122,8 +165,8 @@ export default function Home() {
   const handleLoadProductionConditions = async () => {
     if (!urls.conditions) {
       toast({
-        title: "URL Required",
-        description: "Please set the 'Production Conditions URL' in the sidebar.",
+        title: "Conditions URL Not Set",
+        description: "Please set your Configuration URL and load the links first.",
         variant: "destructive",
       });
       return;
@@ -180,7 +223,7 @@ export default function Home() {
       return;
     }
     if (!urls.save) {
-      toast({ title: "URL Required", description: "Please provide the 'Save Schedule URL' in the sidebar.", variant: "destructive" });
+      toast({ title: "Save URL Not Set", description: "Please set your Configuration URL and load the links first.", variant: "destructive" });
       return;
     }
 
@@ -354,6 +397,7 @@ export default function Home() {
         onOpenChange={setIsIntegrationDialogOpen}
         urls={urls}
         onSaveUrls={handleSaveUrls}
+        onLoadFromSheet={handleLoadUrlsFromSheet}
       />
     </div>
   );

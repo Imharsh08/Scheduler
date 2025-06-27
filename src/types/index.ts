@@ -54,6 +54,7 @@ export interface PressWorkload {
 }
 
 export interface IntegrationUrls {
+  config: string;
   tasks: string;
   conditions: string;
   save: string;
