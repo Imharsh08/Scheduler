@@ -10,7 +10,7 @@
  * 1. Open your Google Sheet that contains the "FMS 2" data.
  * 2. Go to Extensions > Apps Script.
  * 3. Paste this entire script into the editor, replacing any default code.
- * 4. Ensure your "FMS 2" sheet has the following headers (case-sensitive):
+ * 4. Ensure your "FMS 2" sheet has its headers on the 7th row, including:
  *    - Date
  *    - Job Card No.
  *    - Order qty
@@ -58,52 +58,68 @@ function doGet(e) {
       return createJsonResponse({ error: "Sheet '" + SHEET_NAME + "' not found." });
     }
     
-    var data = sheet.getDataRange().getValues();
-    if (data.length <= 1) {
-      return createJsonResponse([]); // No data besides headers
+    // Get all data from the sheet
+    var allData = sheet.getDataRange().getValues();
+    
+    // Check if there are enough rows for the header
+    if (allData.length < 7) {
+      return createJsonResponse([]); // Not enough data for headers
     }
 
-    var headers = data.shift(); // Get headers and remove them from data
-    
+    // Headers are in the 7th row (index 6)
+    var headers = allData[6]; 
+    // Actual data starts from the 8th row (index 7)
+    var dataRows = allData.slice(7);
+
+    if (dataRows.length === 0) {
+      return createJsonResponse([]); // No data rows found after the header
+    }
+
     // Find the column index for each required header
     var headerIndices = {};
     for (var key in HEADER_MAPPING) {
       var headerName = HEADER_MAPPING[key];
       var index = headers.indexOf(headerName);
       if (index === -1) {
-        return createJsonResponse({ error: "Required header not found in 'FMS 2' sheet: " + headerName });
+        return createJsonResponse({ error: "Required header not found in 'FMS 2' sheet (in row 7): " + headerName });
       }
       headerIndices[key] = index;
     }
     
-    var tasks = data.map(function(row) {
+    var tasks = dataRows.map(function(row) {
       var task = {};
       
       // Build the task object using the mapped indices
       for (var key in headerIndices) {
         var index = headerIndices[key];
-        var value = row[index];
+        // Check if the row has enough columns
+        if (index < row.length) {
+          var value = row[index];
         
-        if ((key === 'creationDate' || key === 'deliveryDate') && value instanceof Date) {
-          // Check if date is valid before converting
-          if (!isNaN(value.getTime())) {
-            task[key] = value.toISOString();
+          if ((key === 'creationDate' || key === 'deliveryDate') && value instanceof Date) {
+            // Check if date is valid before converting
+            if (!isNaN(value.getTime())) {
+              task[key] = value.toISOString();
+            } else {
+              task[key] = null;
+            }
+          } else if (key === 'priority') {
+             var priorityValue = String(value || '').trim().toLowerCase();
+             if (priorityValue === 'high') {
+               task[key] = 'High';
+             } else if (priorityValue === 'normal') {
+               task[key] = 'Normal';
+             } else if (priorityValue === 'low') {
+               task[key] = 'Low';
+             } else {
+               task[key] = 'None';
+             }
           } else {
-            task[key] = null;
+            task[key] = value;
           }
-        } else if (key === 'priority') {
-           var priorityValue = String(value || '').trim().toLowerCase();
-           if (priorityValue === 'high') {
-             task[key] = 'High';
-           } else if (priorityValue === 'normal') {
-             task[key] = 'Normal';
-           } else if (priorityValue === 'low') {
-             task[key] = 'Low';
-           } else {
-             task[key] = 'None';
-           }
         } else {
-          task[key] = value;
+            // Handle cases where a row might be shorter than the header row
+            task[key] = null;
         }
       }
       return task;
