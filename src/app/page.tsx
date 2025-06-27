@@ -32,11 +32,21 @@ export default function Home() {
 
     setIsLoadingTasks(true);
     try {
-      const response = await fetch(url);
+      // Use the Next.js API route as a proxy to avoid CORS issues
+      const proxyUrl = `/api/tasks?url=${encodeURIComponent(url)}`;
+      const response = await fetch(proxyUrl);
+      const data = await response.json(); // Always expect JSON now from our proxy
+
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        // Use the detailed error message from our proxy if available
+        const errorMessage = data.details || data.error || `Request failed with status: ${response.status}`;
+        throw new Error(errorMessage);
       }
-      const data = await response.json();
+      
+      // Handle cases where the script returns an error object in a 200 OK response
+      if (data.error) {
+        throw new Error(`Error from Google Script: ${data.error}`);
+      }
 
       const fetchedTasks: Task[] = data.map((item: any) => ({
         jobCardNumber: item.jobCardNumber,
@@ -57,9 +67,10 @@ export default function Home() {
 
     } catch (error) {
       console.error("Failed to load tasks:", error);
+      const description = error instanceof Error ? error.message : "Could not fetch tasks. Check the URL and try again.";
       toast({
         title: "Error Loading Tasks",
-        description: "Could not fetch tasks. Check the URL and CORS settings.",
+        description: description,
         variant: "destructive",
       });
     } finally {
@@ -87,45 +98,43 @@ export default function Home() {
     task: Task,
     shift: Shift
   ) => {
-    // Update tasks by reducing the remaining quantity
-    setTasks((prevTasks) =>
-      prevTasks
-        .map((t) =>
-          t.jobCardNumber === task.jobCardNumber
-            ? { ...t, remainingQuantity: t.remainingQuantity - scheduledTaskDetails.scheduledQuantity }
-            : t
-        )
-        .filter((t) => t.remainingQuantity > 0)
-    );
-
-    // Update the specific shift's remaining capacity
-    setShifts((prevShifts) =>
-      prevShifts.map((s) =>
-        s.id === shift.id
-          ? { ...s, remainingCapacity: s.remainingCapacity - scheduledTaskDetails.timeTaken }
-          : s
-      )
-    );
-
-    // Add the task to the schedule with a unique batch ID
-    setSchedule((prevSchedule) => {
-      const newSchedule = { ...prevSchedule };
-      const { jobCardNumber } = scheduledTaskDetails;
-
-      const batchCount = Object.values(newSchedule)
+    setSchedule((currentSchedule) => {
+      // Logic to generate the new unique ID goes *inside* the state setter
+      const batchCount = Object.values(currentSchedule)
         .flat()
-        .filter((st) => st.jobCardNumber === jobCardNumber).length;
+        .filter(st => st.jobCardNumber === task.jobCardNumber).length;
       
       const batchSuffix = String.fromCharCode('A'.charCodeAt(0) + batchCount);
-      const newId = `${jobCardNumber}-${batchSuffix}`;
+      const newId = `${task.jobCardNumber}-${batchSuffix}`;
 
       const scheduledTask: ScheduledTask = {
         ...scheduledTaskDetails,
         id: newId,
       };
+
+      // Update tasks by reducing the remaining quantity
+      setTasks((prevTasks) =>
+        prevTasks
+          .map((t) =>
+            t.jobCardNumber === task.jobCardNumber
+              ? { ...t, remainingQuantity: t.remainingQuantity - scheduledTaskDetails.scheduledQuantity }
+              : t
+          )
+          .filter((t) => t.remainingQuantity > 0)
+      );
+
+      // Update the specific shift's remaining capacity
+      setShifts((prevShifts) =>
+        prevShifts.map((s) =>
+          s.id === shift.id
+            ? { ...s, remainingCapacity: s.remainingCapacity - scheduledTaskDetails.timeTaken }
+            : s
+        )
+      );
       
+      // Add the task to the schedule
+      const newSchedule = { ...currentSchedule };
       const newShiftTasks = [...(newSchedule[shift.id] || []), scheduledTask];
-      
       newSchedule[shift.id] = newShiftTasks;
       return newSchedule;
     });
