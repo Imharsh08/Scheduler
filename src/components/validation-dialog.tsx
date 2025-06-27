@@ -11,6 +11,8 @@ import { useToast } from "@/hooks/use-toast";
 import type { ValidationRequest, ProductionCondition, ScheduledTask, Task, Shift } from '@/types';
 import { validatePressDieCombination, type ValidatePressDieCombinationOutput } from '@/ai/flows/validate-press-die-combination';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Card, CardContent } from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
 
 interface ValidationDialogProps {
   request: ValidationRequest;
@@ -39,7 +41,6 @@ export const ValidationDialog: React.FC<ValidationDialogProps> = ({ request, pro
   const [piecesPerCycle, setPiecesPerCycle] = useState(0);
 
   const [scheduledQuantity, setScheduledQuantity] = useState('');
-  const [timeTaken, setTimeTaken] = useState(0);
   const [maxPossibleQty, setMaxPossibleQty] = useState(0);
 
   const pressOptions = React.useMemo(() => {
@@ -93,22 +94,6 @@ export const ValidationDialog: React.FC<ValidationDialogProps> = ({ request, pro
         setStep('details');
     }
   }, [dieNo]);
-  
-  useEffect(() => {
-    if (!selectedCondition || piecesPerCycle <= 0) {
-      setTimeTaken(0);
-      return;
-    }
-    
-    const qty = parseInt(scheduledQuantity, 10) || 0;
-    if (piecesPerCycle > 0) {
-      const cyclesForScheduledQty = Math.ceil(qty / piecesPerCycle);
-      const newTimeTaken = cyclesForScheduledQty * selectedCondition.cureTime;
-      setTimeTaken(newTimeTaken);
-    } else {
-      setTimeTaken(0);
-    }
-  }, [scheduledQuantity, selectedCondition, piecesPerCycle]);
 
   const handleValidate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -200,7 +185,11 @@ export const ValidationDialog: React.FC<ValidationDialogProps> = ({ request, pro
   }
 
   const handleConfirm = () => {
-    if (!selectedCondition) return;
+    if (!selectedCondition || !scheduledQuantity) return;
+    
+    const qty = parseInt(scheduledQuantity, 10);
+    const calculatedCycles = Math.ceil(qty / piecesPerCycle);
+    const timeTaken = calculatedCycles * selectedCondition.cureTime;
 
     const finalPressNo = parseInt(pressNo === 'other' ? otherPressNo : pressNo, 10);
     const finalDieNo = parseInt(dieNo === 'other' ? otherDieNo : dieNo, 10);
@@ -209,7 +198,7 @@ export const ValidationDialog: React.FC<ValidationDialogProps> = ({ request, pro
       jobCardNumber: task.jobCardNumber,
       itemCode: task.itemCode,
       material: task.material,
-      scheduledQuantity: parseInt(scheduledQuantity, 10) || 0,
+      scheduledQuantity: qty,
       pressNo: finalPressNo,
       dieNo: finalDieNo,
       timeTaken: timeTaken,
@@ -248,6 +237,66 @@ export const ValidationDialog: React.FC<ValidationDialogProps> = ({ request, pro
         return '';
     }
   }
+
+  const renderConfirmStep = () => {
+    if (!selectedCondition) return null;
+
+    const scheduledQtyNum = parseInt(scheduledQuantity, 10) || 0;
+    const calculatedCycles = piecesPerCycle > 0 ? Math.ceil(scheduledQtyNum / piecesPerCycle) : 0;
+    const timeTaken = calculatedCycles * selectedCondition.cureTime;
+
+    return (
+      <div>
+        <div className="grid gap-6 py-4">
+          <div className="grid grid-cols-3 items-center gap-4">
+              <Label htmlFor="quantity" className="text-right">Schedule Qty</Label>
+              <Input id="quantity" type="number" value={scheduledQuantity} onChange={handleQuantityChange} className="col-span-2" max={maxPossibleQty} />
+          </div>
+
+          <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+            <div className="text-muted-foreground">Remaining in Job:</div>
+            <div className="font-medium text-right">{task.remainingQuantity} pcs</div>
+            
+            <div className="text-muted-foreground">Shift Capacity Left:</div>
+            <div className="font-medium text-right">{shift.remainingCapacity} min</div>
+          </div>
+          
+          <Card className="bg-secondary/50">
+            <CardContent className="p-3">
+              <h4 className="text-sm font-semibold mb-2 text-center">Calculation Details</h4>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                <div className="text-muted-foreground">Pieces / Cycle:</div>
+                <div className="font-mono text-right">{piecesPerCycle}</div>
+
+                <div className="text-muted-foreground">Time / Cycle:</div>
+                <div className="font-mono text-right">{selectedCondition.cureTime} min</div>
+
+                <div className="text-muted-foreground">Calculated Cycles:</div>
+                <div className="font-mono text-right">{calculatedCycles}</div>
+              </div>
+              <Separator className="my-2 bg-border/50" />
+              <div className="flex justify-between items-center text-sm font-bold">
+                  <span>Total Time Required:</span>
+                  <span>{timeTaken} min</span>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+        <DialogFooter className="mt-4">
+          <Button type="button" variant="ghost" onClick={() => setStep('select_operation')}>
+              <ArrowLeft className="mr-2 h-4 w-4" /> Back
+          </Button>
+          <Button type="button" onClick={handleConfirm} disabled={!scheduledQuantity || parseInt(scheduledQuantity, 10) <= 0 || timeTaken > shift.remainingCapacity}>
+            Confirm Schedule
+          </Button>
+        </DialogFooter>
+        {timeTaken > shift.remainingCapacity && (
+            <p className="text-sm text-destructive text-center mt-2">Scheduled time exceeds remaining shift capacity.</p>
+        )}
+      </div>
+    );
+  };
+
 
   return (
     <Dialog open={true} onOpenChange={onClose}>
@@ -337,39 +386,7 @@ export const ValidationDialog: React.FC<ValidationDialogProps> = ({ request, pro
           </div>
         )}
 
-        {step === 'confirm' && selectedCondition && (
-          <div>
-            <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-3 items-center gap-4">
-                  <Label htmlFor="quantity">Schedule Quantity</Label>
-                  <Input id="quantity" type="number" value={scheduledQuantity} onChange={handleQuantityChange} className="col-span-2" max={maxPossibleQty} />
-              </div>
-              <div className="grid grid-cols-3 items-center gap-4 text-sm">
-                <span className="text-muted-foreground">Remaining in Job:</span>
-                <span className="col-span-2 font-medium">{task.remainingQuantity}</span>
-              </div>
-              <div className="grid grid-cols-3 items-center gap-4 text-sm">
-                <span className="text-muted-foreground">Time Required:</span>
-                <span className="col-span-2 font-medium">{timeTaken} minutes</span>
-              </div>
-               <div className="grid grid-cols-3 items-center gap-4 text-sm">
-                <span className="text-muted-foreground">Shift Capacity Left:</span>
-                <span className="col-span-2 font-medium">{shift.remainingCapacity} minutes</span>
-              </div>
-            </div>
-            <DialogFooter className="mt-4">
-              <Button type="button" variant="ghost" onClick={() => setStep('select_operation')}>
-                  <ArrowLeft className="mr-2 h-4 w-4" /> Back
-              </Button>
-              <Button type="button" onClick={handleConfirm} disabled={!scheduledQuantity || parseInt(scheduledQuantity, 10) <= 0 || timeTaken > shift.remainingCapacity}>
-                Confirm Schedule
-              </Button>
-            </DialogFooter>
-             {timeTaken > shift.remainingCapacity && (
-                 <p className="text-sm text-destructive text-center mt-2">Scheduled time exceeds remaining shift capacity.</p>
-             )}
-          </div>
-        )}
+        {step === 'confirm' && renderConfirmStep()}
       </DialogContent>
     </Dialog>
   );
