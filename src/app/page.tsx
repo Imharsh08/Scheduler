@@ -16,8 +16,8 @@ import { ProductionConditionsDialog } from '@/components/production-conditions-d
 
 export default function Home() {
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
-  const [shifts, setShifts] = useState<Shift[]>(initialShifts);
-  const [schedule, setSchedule] = useState<Schedule>({});
+  const [shiftsByPress, setShiftsByPress] = useState<Record<number, Shift[]>>({});
+  const [scheduleByPress, setScheduleByPress] = useState<Record<number, Schedule>>({});
   const [productionConditions, setProductionConditions] = useState<ProductionCondition[]>(initialProductionConditions);
   const [validationRequest, setValidationRequest] = useState<ValidationRequest | null>(null);
   const [isLoadingTasks, setIsLoadingTasks] = useState(false);
@@ -55,6 +55,29 @@ export default function Home() {
       console.error("Failed to load data from localStorage", error);
     }
   }, []);
+
+  useEffect(() => {
+    if (productionConditions.length > 0) {
+      const pressNos = [...new Set(productionConditions.map(pc => pc.pressNo))];
+      
+      setShiftsByPress(prev => {
+        const newShiftsByPress: Record<number, Shift[]> = {};
+        pressNos.forEach(pressNo => {
+          newShiftsByPress[pressNo] = prev[pressNo] || JSON.parse(JSON.stringify(initialShifts));
+        });
+        return newShiftsByPress;
+      });
+
+      setScheduleByPress(prev => {
+        const newScheduleByPress: Record<number, Schedule> = {};
+        pressNos.forEach(pressNo => {
+          newScheduleByPress[pressNo] = prev[pressNo] || {};
+        });
+        return newScheduleByPress;
+      });
+    }
+  }, [productionConditions]);
+
 
   const handleLoadTasks = async (taskUrl?: string) => {
     const urlToUse = taskUrl || urls.tasks;
@@ -183,7 +206,6 @@ export default function Home() {
       }
       
       if (data.error) {
-        console.error("Configuration error from Google Sheet:", data.error);
         let userFriendlyDescription = data.error;
         if (typeof userFriendlyDescription === 'string' && (userFriendlyDescription.includes("' not found") || userFriendlyDescription.includes("Missing 'Key' or 'Value' headers"))) {
             userFriendlyDescription = `There's a problem with your "Web Url" configuration sheet. Please ensure it exists and has "Key" and "Value" columns as described in the setup instructions.`;
@@ -209,7 +231,6 @@ export default function Home() {
         description: "Loading associated data automatically...",
       });
 
-      // Automatically load data after successful config load
       if (newUrls.tasks) {
         handleLoadTasks(newUrls.tasks);
       }
@@ -235,7 +256,7 @@ export default function Home() {
     setUrls(newUrls);
     try {
       localStorage.setItem('integrationUrls', JSON.stringify(newUrls));
-      if(newUrls.config){ // Only show toast if it's not the initial blank save
+      if(newUrls.config){ 
          toast({
           title: "Links Saved",
           description: "Your integration links have been saved successfully.",
@@ -270,7 +291,17 @@ export default function Home() {
   };
 
   const handleSaveSchedule = async () => {
-    const scheduledItems = Object.values(schedule).flat();
+    const mergedSchedule: Schedule = {};
+    Object.values(scheduleByPress).forEach(pressSchedule => {
+      Object.keys(pressSchedule).forEach(shiftId => {
+        if (!mergedSchedule[shiftId]) {
+          mergedSchedule[shiftId] = [];
+        }
+        mergedSchedule[shiftId].push(...pressSchedule[shiftId]);
+      });
+    });
+
+    const scheduledItems = Object.values(mergedSchedule).flat();
     if (scheduledItems.length === 0) {
       toast({ title: "Nothing to Save", description: "The schedule is empty." });
       return;
@@ -285,7 +316,7 @@ export default function Home() {
       const response = await fetch('/api/schedule', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sheetUrl: urls.save, schedule }),
+        body: JSON.stringify({ sheetUrl: urls.save, schedule: mergedSchedule }),
       });
       const result = await response.json();
       if (!response.ok) {
@@ -324,7 +355,9 @@ export default function Home() {
     }
     const taskId = e.dataTransfer.getData('text/plain');
     const task = tasks.find((t) => t.jobCardNumber === taskId);
-    const shift = shifts.find((s) => s.id === shiftId);
+    
+    const pressShifts = shiftsByPress[selectedPress] || [];
+    const shift = pressShifts.find((s) => s.id === shiftId);
 
     if (task && shift) {
         const isTaskValidForPress = productionConditions.some(
@@ -359,54 +392,52 @@ export default function Home() {
     return tasks.filter(task => validItemCodesForPress.has(task.itemCode));
   }, [tasks, selectedPress, productionConditions]);
 
-  const filteredSchedule = React.useMemo(() => {
-    if (selectedPress === null) {
-      return {};
-    }
-    const newSchedule: Schedule = {};
-    Object.keys(schedule).forEach(shiftId => {
-      const shiftTasks = schedule[shiftId] || [];
-      newSchedule[shiftId] = shiftTasks.filter(task => task.pressNo === selectedPress);
-    });
-    return newSchedule;
-  }, [schedule, selectedPress]);
-
-
   const handleValidationSuccess = (
     scheduledItems: Omit<ScheduledTask, 'id'>[],
   ) => {
     if (!validationRequest) return;
-    const { task } = validationRequest;
+    const { task, pressNo: pressToUpdate } = validationRequest;
 
-    let currentBatchCount = Object.values(schedule)
-      .flat()
-      .filter(st => st.jobCardNumber === task.jobCardNumber).length;
-    
     let totalQuantityScheduled = 0;
-    const scheduleUpdates = new Map<string, ScheduledTask[]>();
     const shiftCapacityUpdates = new Map<string, number>();
+    const newScheduledTasksWithIds: ScheduledTask[] = [];
 
-    scheduledItems.forEach((item) => {
-      const batchSuffix = String.fromCharCode('A'.charCodeAt(0) + currentBatchCount);
-      const newId = `${item.jobCardNumber}-${batchSuffix}`;
-      currentBatchCount++;
+    setScheduleByPress(current => {
+      const pressSchedule = current[pressToUpdate] || {};
+      let currentBatchCount = Object.values(pressSchedule)
+          .flat()
+          .filter(st => st.jobCardNumber === task.jobCardNumber).length;
       
-      const scheduledTask: ScheduledTask = { ...item, id: newId };
-      totalQuantityScheduled += item.scheduledQuantity;
+      scheduledItems.forEach(item => {
+        totalQuantityScheduled += item.scheduledQuantity;
+        const timeUpdate = shiftCapacityUpdates.get(item.shiftId) || 0;
+        shiftCapacityUpdates.set(item.shiftId, timeUpdate + item.timeTaken);
+        
+        const batchSuffix = String.fromCharCode('A'.charCodeAt(0) + currentBatchCount);
+        const newId = `${item.jobCardNumber}-${batchSuffix}`;
+        currentBatchCount++;
+        newScheduledTasksWithIds.push({ ...item, id: newId });
+      });
 
-      const currentShiftTasks = scheduleUpdates.get(item.shiftId) || schedule[item.shiftId] || [];
-      scheduleUpdates.set(item.shiftId, [...currentShiftTasks, scheduledTask]);
+      const newPressSchedule = { ...pressSchedule };
+      newScheduledTasksWithIds.forEach(scheduledTask => {
+        const currentShiftTasks = newPressSchedule[scheduledTask.shiftId] || [];
+        newPressSchedule[scheduledTask.shiftId] = [...currentShiftTasks, scheduledTask];
+      });
 
-      const timeUpdate = shiftCapacityUpdates.get(item.shiftId) || 0;
-      shiftCapacityUpdates.set(item.shiftId, timeUpdate + item.timeTaken);
+      return { ...current, [pressToUpdate]: newPressSchedule };
     });
 
-    setSchedule((currentSchedule) => {
-      const newSchedule = { ...currentSchedule };
-      for (const [shiftId, tasksToAdd] of scheduleUpdates.entries()) {
-        newSchedule[shiftId] = tasksToAdd;
-      }
-      return newSchedule;
+    setShiftsByPress(current => {
+      const pressShifts = current[pressToUpdate] || [];
+      const updatedPressShifts = pressShifts.map(s => {
+        const timeToDecrement = shiftCapacityUpdates.get(s.id);
+        if (timeToDecrement) {
+          return { ...s, remainingCapacity: s.remainingCapacity - timeToDecrement };
+        }
+        return s;
+      });
+      return { ...current, [pressToUpdate]: updatedPressShifts };
     });
 
     setTasks((prevTasks) =>
@@ -417,16 +448,6 @@ export default function Home() {
             : t
         )
         .filter((t) => t.remainingQuantity > 0)
-    );
-
-    setShifts((prevShifts) =>
-      prevShifts.map((s) => {
-        const timeToDecrement = shiftCapacityUpdates.get(s.id);
-        if (timeToDecrement) {
-          return { ...s, remainingCapacity: s.remainingCapacity - timeToDecrement };
-        }
-        return s;
-      })
     );
     
     setValidationRequest(null);
@@ -455,7 +476,7 @@ export default function Home() {
       <main className="flex-1 flex flex-col gap-4 p-4 lg:p-6 overflow-hidden">
         <PressWorkloadPanel
           tasks={tasks}
-          schedule={schedule}
+          scheduleByPress={scheduleByPress}
           productionConditions={productionConditions}
           onPressSelect={handlePressSelect}
           selectedPress={selectedPress}
@@ -471,8 +492,8 @@ export default function Home() {
             </div>
             <div className="lg:w-2/3 flex-1 overflow-x-auto">
               <ScheduleGrid
-                shifts={shifts}
-                schedule={filteredSchedule}
+                shifts={selectedPress !== null ? shiftsByPress[selectedPress] || [] : []}
+                schedule={selectedPress !== null ? scheduleByPress[selectedPress] || {} : {}}
                 onDrop={handleDrop}
                 dieColors={dieColors}
                 selectedPress={selectedPress}
@@ -484,7 +505,7 @@ export default function Home() {
         <ValidationDialog
           request={validationRequest}
           productionConditions={productionConditions}
-          shifts={shifts}
+          shifts={shiftsByPress[validationRequest.pressNo] || []}
           onClose={() => setValidationRequest(null)}
           onSuccess={handleValidationSuccess}
         />

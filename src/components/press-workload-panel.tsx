@@ -1,3 +1,4 @@
+
 import React, { useMemo } from 'react';
 import type { Task, Schedule, ProductionCondition, PressWorkload } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,13 +9,13 @@ import { ScrollArea, ScrollBar } from './ui/scroll-area';
 
 interface PressWorkloadPanelProps {
   tasks: Task[];
-  schedule: Schedule;
+  scheduleByPress: Record<number, Schedule>;
   productionConditions: ProductionCondition[];
   onPressSelect: (pressNo: number | null) => void;
   selectedPress: number | null;
 }
 
-export const PressWorkloadPanel: React.FC<PressWorkloadPanelProps> = ({ tasks, schedule, productionConditions, onPressSelect, selectedPress }) => {
+export const PressWorkloadPanel: React.FC<PressWorkloadPanelProps> = ({ tasks, scheduleByPress, productionConditions, onPressSelect, selectedPress }) => {
 
   const pressWorkloads = useMemo(() => {
     if (productionConditions.length === 0) return [];
@@ -45,14 +46,16 @@ export const PressWorkloadPanel: React.FC<PressWorkloadPanelProps> = ({ tasks, s
         });
     });
 
-    Object.values(schedule).flat().forEach(scheduledTask => {
-      if (workloads[scheduledTask.pressNo]) {
-        workloads[scheduledTask.pressNo].scheduledQuantity += scheduledTask.scheduledQuantity;
-      }
+    Object.values(scheduleByPress).forEach(pressSchedule => {
+      Object.values(pressSchedule).flat().forEach(scheduledTask => {
+        if (workloads[scheduledTask.pressNo]) {
+          workloads[scheduledTask.pressNo].scheduledQuantity += scheduledTask.scheduledQuantity;
+        }
+      });
     });
 
     return Object.values(workloads).sort((a, b) => a.pressNo - b.pressNo);
-  }, [tasks, schedule, productionConditions]);
+  }, [tasks, scheduleByPress, productionConditions]);
 
 
   return (
