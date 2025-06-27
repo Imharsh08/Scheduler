@@ -15,7 +15,8 @@ export interface ProductionCondition {
   pressNo: number;
   dieNo: number;
   material: string;
-  piecesPerCycle: number;
+  piecesPerCycle1: number; // Pieces for one-side operation
+  piecesPerCycle2: number; // Pieces for two-side operation
   cureTime: number; // in minutes
 }
 

@@ -3,7 +3,7 @@
  *
  * This script is designed to fetch production conditions from your "Manufacturing details" sheet.
  * It maps your specific columns to the data structure needed by the ProSched app, including
- * calculating the pieces per cycle from your side operation columns.
+ * separating out the pieces per cycle for one-side and two-side operations.
  *
  * How to use:
  * 1. Open the Google Sheet that contains your "Manufacturing details" data.
@@ -20,7 +20,7 @@
  *    - cycle time 2 side operation
  * 6. Click "Deploy" > "New deployment".
  * 7. For "Select type", choose "Web app".
- * 8. In "Configuration", give it a description (e.g., "ProSched Production Conditions API").
+ * 8. In "Configuration", give it a description (e.g., "ProSched Production Conditions API v2").
  * 9. For "Who has access", select "Anyone". **This is crucial for the app to access it.**
  * 10. Click "Deploy".
  * 11. Authorize the script when prompted.
@@ -97,28 +97,19 @@ function doGet(e) {
         return 0;
       }
 
-      // Calculate piecesPerCycle by adding the two side operation values
-      var side1 = getNumberFromRow('piecesPerCycle1');
-      var side2 = getNumberFromRow('piecesPerCycle2');
-      var totalPieces = side1 + side2;
-
-      // If side operations are not specified, assume at least 1 piece per cycle.
-      if (totalPieces === 0) {
-        totalPieces = 1;
-      }
-
       var cureTimeInSeconds = getNumberFromRow('cureTime');
       // Convert cure time from seconds to minutes, rounding up.
       var cureTimeInMinutes = Math.ceil(cureTimeInSeconds / 60);
 
-      // Build the condition object
+      // Build the condition object, returning both side operation values
       var condition = {
         itemCode: row[headerIndices.itemCode],
         pressNo: getNumberFromRow('pressNo'),
         dieNo: getNumberFromRow('dieNo'),
         material: row[headerIndices.material],
         cureTime: cureTimeInMinutes,
-        piecesPerCycle: totalPieces,
+        piecesPerCycle1: getNumberFromRow('piecesPerCycle1'),
+        piecesPerCycle2: getNumberFromRow('piecesPerCycle2'),
       };
       
       return condition;

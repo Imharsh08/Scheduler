@@ -16,9 +16,9 @@ export const initialShifts: Shift[] = days.flatMap(day => [
 ]);
 
 export const initialProductionConditions: ProductionCondition[] = [
-  { itemCode: 'Gasket001', pressNo: 11, dieNo: 562, material: 'EPDM', piecesPerCycle: 3, cureTime: 6 },
-  { itemCode: 'Gasket001', pressNo: 11, dieNo: 551, material: 'EPDM', piecesPerCycle: 3, cureTime: 3 },
-  { itemCode: 'Gasket002', pressNo: 8, dieNo: 541, material: 'EPDM', piecesPerCycle: 6, cureTime: 11 },
-  { itemCode: 'Gasket003', pressNo: 8, dieNo: 551, material: 'NBR', piecesPerCycle: 6, cureTime: 3 },
-  { itemCode: 'Gasket003', pressNo: 9, dieNo: 552, material: 'NBR', piecesPerCycle: 5, cureTime: 4 },
+  { itemCode: 'Gasket001', pressNo: 11, dieNo: 562, material: 'EPDM', piecesPerCycle1: 3, piecesPerCycle2: 6, cureTime: 6 },
+  { itemCode: 'Gasket001', pressNo: 11, dieNo: 551, material: 'EPDM', piecesPerCycle1: 3, piecesPerCycle2: 0, cureTime: 3 },
+  { itemCode: 'Gasket002', pressNo: 8, dieNo: 541, material: 'EPDM', piecesPerCycle1: 6, piecesPerCycle2: 0, cureTime: 11 },
+  { itemCode: 'Gasket003', pressNo: 8, dieNo: 551, material: 'NBR', piecesPerCycle1: 6, piecesPerCycle2: 0, cureTime: 3 },
+  { itemCode: 'Gasket003', pressNo: 9, dieNo: 552, material: 'NBR', piecesPerCycle1: 5, piecesPerCycle2: 10, cureTime: 4 },
 ];

@@ -109,7 +109,8 @@ export default function Home() {
         pressNo: item.pressNo,
         dieNo: item.dieNo,
         material: item.material,
-        piecesPerCycle: item.piecesPerCycle,
+        piecesPerCycle1: item.piecesPerCycle1 || 0,
+        piecesPerCycle2: item.piecesPerCycle2 || 0,
         cureTime: item.cureTime,
       }));
 

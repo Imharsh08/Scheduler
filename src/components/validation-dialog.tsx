@@ -23,7 +23,7 @@ export const ValidationDialog: React.FC<ValidationDialogProps> = ({ request, pro
   const { task, shift } = request;
   const { toast } = useToast();
   
-  const [step, setStep] = useState<'details' | 'confirm'>('details');
+  const [step, setStep] = useState<'details' | 'select_operation' | 'confirm'>('details');
 
   const [pressNo, setPressNo] = useState('');
   const [otherPressNo, setOtherPressNo] = useState('');
@@ -34,8 +34,10 @@ export const ValidationDialog: React.FC<ValidationDialogProps> = ({ request, pro
   const [isLoading, setIsLoading] = useState(false);
   const [validationResult, setValidationResult] = useState<ValidatePressDieCombinationOutput | null>(null);
 
-  // State for confirmation step
   const [selectedCondition, setSelectedCondition] = useState<ProductionCondition | null>(null);
+  const [operationType, setOperationType] = useState(''); // '1' for one-side, '2' for two-side
+  const [piecesPerCycle, setPiecesPerCycle] = useState(0);
+
   const [scheduledQuantity, setScheduledQuantity] = useState('');
   const [timeTaken, setTimeTaken] = useState(0);
   const [maxPossibleQty, setMaxPossibleQty] = useState(0);
@@ -59,26 +61,54 @@ export const ValidationDialog: React.FC<ValidationDialogProps> = ({ request, pro
       .map(pc => pc.dieNo);
     return [...new Set(dies)].map(d => String(d));
   }, [productionConditions, task.itemCode, task.material, pressNo]);
+
+  const operationOptions = React.useMemo(() => {
+    if (!selectedCondition) return [];
+    const options = [];
+    if (selectedCondition.piecesPerCycle1 > 0) {
+      options.push({ value: '1', label: `One Side (${selectedCondition.piecesPerCycle1} pcs/cycle)` });
+    }
+    if (selectedCondition.piecesPerCycle2 > 0) {
+      options.push({ value: '2', label: `Two Side (${selectedCondition.piecesPerCycle2} pcs/cycle)` });
+    }
+    return options;
+  }, [selectedCondition]);
   
   useEffect(() => {
     setDieNo('');
     setOtherDieNo('');
     setValidationResult(null);
+    setSelectedCondition(null);
+    setOperationType('');
+    if (step !== 'details') {
+        setStep('details');
+    }
   }, [pressNo]);
 
   useEffect(() => {
-    if (!selectedCondition) return;
+    setValidationResult(null);
+    setSelectedCondition(null);
+    setOperationType('');
+    if (step !== 'details') {
+        setStep('details');
+    }
+  }, [dieNo]);
+  
+  useEffect(() => {
+    if (!selectedCondition || piecesPerCycle <= 0) {
+      setTimeTaken(0);
+      return;
+    }
     
     const qty = parseInt(scheduledQuantity, 10) || 0;
-    if (selectedCondition.piecesPerCycle > 0) {
-      const cyclesForScheduledQty = Math.ceil(qty / selectedCondition.piecesPerCycle);
+    if (piecesPerCycle > 0) {
+      const cyclesForScheduledQty = Math.ceil(qty / piecesPerCycle);
       const newTimeTaken = cyclesForScheduledQty * selectedCondition.cureTime;
       setTimeTaken(newTimeTaken);
     } else {
       setTimeTaken(0);
     }
-
-  }, [scheduledQuantity, selectedCondition]);
+  }, [scheduledQuantity, selectedCondition, piecesPerCycle]);
 
   const handleValidate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -113,31 +143,12 @@ export const ValidationDialog: React.FC<ValidationDialogProps> = ({ request, pro
         const condition = productionConditions.find(pc => pc.itemCode === task.itemCode && pc.pressNo === press && pc.dieNo === die && pc.material === task.material);
 
         if (condition) {
-          if (condition.cureTime <= 0) {
-            setValidationResult({ isValid: false, reason: "Cannot schedule with a cure time of zero." });
-            setIsLoading(false);
+          if (condition.piecesPerCycle1 <= 0 && condition.piecesPerCycle2 <= 0) {
+            setValidationResult({ isValid: false, reason: "No valid operations found (pieces per cycle is zero)." });
             return;
           }
-          const maxCyclesInShift = Math.floor(shift.remainingCapacity / condition.cureTime);
-          if (maxCyclesInShift <= 0) {
-            setValidationResult({ isValid: false, reason: "Not enough remaining capacity in this shift for even one cycle." });
-            setIsLoading(false);
-            return;
-          }
-          const maxProducibleQty = maxCyclesInShift * condition.piecesPerCycle;
-          const qty = Math.min(task.remainingQuantity, maxProducibleQty);
-          
-          if (isNaN(qty)) {
-            toast({ title: "Calculation Error", description: "Could not calculate a valid quantity. Check the task and production data.", variant: "destructive" });
-            setValidationResult({isValid: false, reason: "Calculation error."})
-            setIsLoading(false);
-            return;
-          }
-
-          setMaxPossibleQty(qty);
-          setScheduledQuantity(String(qty));
           setSelectedCondition(condition);
-          setStep('confirm');
+          setStep('select_operation');
         } else {
            setValidationResult({ isValid: false, reason: "Combination is valid but production details (like cure time) are unknown. Cannot schedule." });
         }
@@ -150,6 +161,43 @@ export const ValidationDialog: React.FC<ValidationDialogProps> = ({ request, pro
       setIsLoading(false);
     }
   };
+
+  const handleContinueToConfirm = () => {
+    if (!selectedCondition || !operationType) {
+        toast({ title: "Operation Type Required", description: "Please select an operation type.", variant: "destructive" });
+        return;
+    }
+    
+    const currentPcsPerCycle = operationType === '1' ? selectedCondition.piecesPerCycle1 : selectedCondition.piecesPerCycle2;
+    setPiecesPerCycle(currentPcsPerCycle);
+
+    if (currentPcsPerCycle <= 0) {
+        toast({ title: "Invalid Operation", description: "Selected operation has zero pieces per cycle.", variant: "destructive" });
+        return;
+    }
+    if (selectedCondition.cureTime <= 0) {
+        toast({ title: "Invalid Data", description: "Cannot schedule with a cure time of zero.", variant: "destructive" });
+        return;
+    }
+
+    const maxCyclesInShift = Math.floor(shift.remainingCapacity / selectedCondition.cureTime);
+    if (maxCyclesInShift <= 0) {
+        toast({ title: "Not Enough Capacity", description: "Not enough remaining capacity in this shift for even one cycle.", variant: "destructive" });
+        return;
+    }
+    
+    const maxProducibleQty = maxCyclesInShift * currentPcsPerCycle;
+    const qty = Math.min(task.remainingQuantity, maxProducibleQty);
+          
+    if (isNaN(qty)) {
+        toast({ title: "Calculation Error", description: "Could not calculate a valid quantity. Check the task and production data.", variant: "destructive" });
+        return;
+    }
+
+    setMaxPossibleQty(qty);
+    setScheduledQuantity(String(qty));
+    setStep('confirm');
+  }
 
   const handleConfirm = () => {
     if (!selectedCondition) return;
@@ -188,15 +236,26 @@ export const ValidationDialog: React.FC<ValidationDialogProps> = ({ request, pro
     }
   };
 
+  const getDialogDescription = () => {
+    switch(step) {
+      case 'details':
+        return `Select or enter Press and Die numbers for item ${task.itemCode} on ${shift.day} ${shift.type} Shift.`;
+      case 'select_operation':
+        return 'This combination is valid. Please select the type of operation to perform.';
+      case 'confirm':
+        return `Confirm the quantity to schedule. Max possible is ${maxPossibleQty}.`;
+      default:
+        return '';
+    }
+  }
+
   return (
     <Dialog open={true} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[480px]">
         <DialogHeader>
           <DialogTitle className="font-headline">Schedule Task: {task.jobCardNumber}</DialogTitle>
           <DialogDescription>
-            {step === 'details' 
-              ? `Select or enter Press and Die numbers for item ${task.itemCode} on ${shift.day} ${shift.type} Shift.`
-              : `Confirm the quantity to schedule. Max possible is ${maxPossibleQty}.`}
+            {getDialogDescription()}
           </DialogDescription>
         </DialogHeader>
 
@@ -248,6 +307,36 @@ export const ValidationDialog: React.FC<ValidationDialogProps> = ({ request, pro
           </form>
         )}
 
+        {step === 'select_operation' && (
+          <div>
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="operationType" className="text-right">Operation Type</Label>
+                <Select value={operationType} onValueChange={setOperationType}>
+                  <SelectTrigger id="operationType" className="col-span-3">
+                    <SelectValue placeholder="Select an operation type..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {operationOptions.length > 0 ? (
+                      operationOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)
+                    ) : (
+                      <SelectItem value="none" disabled>No operations available</SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+             <DialogFooter className="mt-4">
+              <Button type="button" variant="ghost" onClick={() => setStep('details')}>
+                  <ArrowLeft className="mr-2 h-4 w-4" /> Back
+              </Button>
+              <Button type="button" onClick={handleContinueToConfirm} disabled={!operationType}>
+                Continue
+              </Button>
+            </DialogFooter>
+          </div>
+        )}
+
         {step === 'confirm' && selectedCondition && (
           <div>
             <div className="grid gap-4 py-4">
@@ -269,7 +358,7 @@ export const ValidationDialog: React.FC<ValidationDialogProps> = ({ request, pro
               </div>
             </div>
             <DialogFooter className="mt-4">
-              <Button type="button" variant="ghost" onClick={() => setStep('details')}>
+              <Button type="button" variant="ghost" onClick={() => setStep('select_operation')}>
                   <ArrowLeft className="mr-2 h-4 w-4" /> Back
               </Button>
               <Button type="button" onClick={handleConfirm} disabled={!scheduledQuantity || parseInt(scheduledQuantity, 10) <= 0 || timeTaken > shift.remainingCapacity}>
