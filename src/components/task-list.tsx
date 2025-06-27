@@ -44,7 +44,7 @@ export const TaskList: React.FC<TaskListProps> = ({ tasks, onDragStart, onLoadTa
   }, [tasks]);
 
   return (
-    <Card className="shadow-lg">
+    <Card className="shadow-lg flex-1 flex flex-col">
       <CardHeader>
         <div className="flex justify-between items-center">
             <div className='flex items-center gap-2'>
@@ -57,10 +57,10 @@ export const TaskList: React.FC<TaskListProps> = ({ tasks, onDragStart, onLoadTa
             </Button>
         </div>
       </CardHeader>
-      <CardContent>
-        <div className="space-y-4 max-h-[calc(100vh-550px)] overflow-y-auto pr-2">
+      <CardContent className="flex-1 overflow-hidden">
+        <div className="space-y-4 h-full overflow-y-auto pr-2">
           {isLoading && tasks.length === 0 ? (
-             <div className="flex justify-center items-center py-4">
+             <div className="flex justify-center items-center h-full">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
              </div>
           ) : sortedTasks.length > 0 ? (

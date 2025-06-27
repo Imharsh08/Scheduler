@@ -5,7 +5,6 @@ import React, { useState, useEffect } from 'react';
 import { Header } from '@/components/header';
 import { TaskList } from '@/components/task-list';
 import { ScheduleGrid } from '@/components/schedule-grid';
-import { ProductionConditionsPanel } from '@/components/production-conditions-panel';
 import { PressWorkloadPanel } from '@/components/press-workload-panel';
 import { ValidationDialog } from '@/components/validation-dialog';
 import { initialShifts, initialProductionConditions, initialTasks } from '@/lib/mock-data';
@@ -13,6 +12,7 @@ import type { Task, Shift, Schedule, ProductionCondition, ScheduledTask, Validat
 import { useToast } from "@/hooks/use-toast";
 import { IntegrationDialog } from '@/components/integration-dialog';
 import { ColorSettingsDialog } from '@/components/color-settings-dialog';
+import { ProductionConditionsDialog } from '@/components/production-conditions-dialog';
 
 export default function Home() {
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
@@ -35,6 +35,7 @@ export default function Home() {
 
   const [isIntegrationDialogOpen, setIsIntegrationDialogOpen] = useState(false);
   const [isColorSettingsDialogOpen, setIsColorSettingsDialogOpen] = useState(false);
+  const [isProductionConditionsDialogOpen, setIsProductionConditionsDialogOpen] = useState(false);
   const [pressColors, setPressColors] = useState<Record<number, string>>({});
 
   useEffect(() => {
@@ -169,7 +170,7 @@ export default function Home() {
   const handleLoadUrlsFromSheet = async (configUrl: string) => {
     if (!configUrl) {
       toast({ title: "URL Required", description: "Please enter the Configuration URL.", variant: "destructive" });
-      return;
+      return null;
     }
     try {
       const proxyUrl = `/api/tasks?url=${encodeURIComponent(configUrl)}`;
@@ -417,6 +418,7 @@ export default function Home() {
         isSaving={isSaving}
         onOpenIntegrationDialog={() => setIsIntegrationDialogOpen(true)}
         onOpenColorSettingsDialog={() => setIsColorSettingsDialogOpen(true)}
+        onOpenProductionConditionsDialog={() => setIsProductionConditionsDialogOpen(true)}
         onRefreshData={handleRefreshData}
       />
       <main className="flex-1 flex flex-col gap-4 p-4 lg:p-6 overflow-hidden">
@@ -428,16 +430,12 @@ export default function Home() {
           selectedPress={selectedPress}
         />
         <div className="flex-1 flex flex-col lg:flex-row gap-6 overflow-hidden">
-            <div className="lg:w-1/3 flex flex-col gap-6 overflow-y-auto pr-2">
+            <div className="lg:w-1/3 flex flex-col pr-2">
               <TaskList
                 tasks={filteredTasks}
                 onDragStart={handleDragStart}
                 onLoadTasks={handleLoadTasks}
                 isLoading={isLoadingTasks}
-              />
-              <ProductionConditionsPanel
-                productionConditions={productionConditions}
-                isLoading={isLoadingConditions}
               />
             </div>
             <div className="lg:w-2/3 flex-1 overflow-x-auto">
@@ -472,6 +470,12 @@ export default function Home() {
         productionConditions={productionConditions}
         pressColors={pressColors}
         onSave={handleSavePressColors}
+      />
+      <ProductionConditionsDialog
+        open={isProductionConditionsDialogOpen}
+        onOpenChange={setIsProductionConditionsDialogOpen}
+        productionConditions={productionConditions}
+        isLoading={isLoadingConditions}
       />
     </div>
   );

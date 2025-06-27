@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Factory, Save, Loader2, Settings, Menu, Palette, RefreshCw } from 'lucide-react';
+import { Factory, Save, Loader2, Settings, Menu, Palette, RefreshCw, Settings2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -15,10 +15,18 @@ interface HeaderProps {
   isSaving: boolean;
   onOpenIntegrationDialog: () => void;
   onOpenColorSettingsDialog: () => void;
+  onOpenProductionConditionsDialog: () => void;
   onRefreshData: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ onSave, isSaving, onOpenIntegrationDialog, onOpenColorSettingsDialog, onRefreshData }) => {
+export const Header: React.FC<HeaderProps> = ({ 
+    onSave, 
+    isSaving, 
+    onOpenIntegrationDialog, 
+    onOpenColorSettingsDialog, 
+    onOpenProductionConditionsDialog,
+    onRefreshData 
+}) => {
   return (
     <header className="flex items-center justify-between p-4 border-b bg-card shadow-sm">
       <div className="flex items-center gap-3">
@@ -44,15 +52,19 @@ export const Header: React.FC<HeaderProps> = ({ onSave, isSaving, onOpenIntegrat
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={onRefreshData}>
+              <RefreshCw className="mr-2 h-4 w-4" />
+              <span>Refresh Data</span>
+            </DropdownMenuItem>
+             <DropdownMenuItem onClick={onOpenProductionConditionsDialog}>
+              <Settings2 className="mr-2 h-4 w-4" />
+              <span>Production Conditions</span>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
             <DropdownMenuItem onClick={onOpenIntegrationDialog}>
               <Settings className="mr-2 h-4 w-4" />
               <span>Integrations</span>
             </DropdownMenuItem>
-             <DropdownMenuItem onClick={onRefreshData}>
-              <RefreshCw className="mr-2 h-4 w-4" />
-              <span>Refresh Data</span>
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
             <DropdownMenuItem onClick={onOpenColorSettingsDialog}>
               <Palette className="mr-2 h-4 w-4" />
               <span>Color Settings</span>
