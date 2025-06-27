@@ -18,6 +18,7 @@ export default function Home() {
   const [productionConditions, setProductionConditions] = useState<ProductionCondition[]>(initialProductionConditions);
   const [validationRequest, setValidationRequest] = useState<ValidationRequest | null>(null);
   const [isLoadingTasks, setIsLoadingTasks] = useState(false);
+  const [isLoadingConditions, setIsLoadingConditions] = useState(false);
   const { toast } = useToast();
 
   const handleLoadTasks = async (url: string) => {
@@ -75,6 +76,59 @@ export default function Home() {
       });
     } finally {
       setIsLoadingTasks(false);
+    }
+  };
+
+  const handleLoadProductionConditions = async (url: string) => {
+    if (!url) {
+      toast({
+        title: "URL Required",
+        description: "Please enter the Production Conditions Apps Script URL.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsLoadingConditions(true);
+    try {
+      const proxyUrl = `/api/tasks?url=${encodeURIComponent(url)}`;
+      const response = await fetch(proxyUrl);
+      const data = await response.json();
+
+      if (!response.ok) {
+        const errorMessage = data.details || data.error || `Request failed with status: ${response.status}`;
+        throw new Error(errorMessage);
+      }
+      
+      if (data.error) {
+        throw new Error(`Error from Google Script: ${data.error}`);
+      }
+
+      const fetchedConditions: ProductionCondition[] = data.map((item: any) => ({
+        itemCode: item.itemCode,
+        pressNo: item.pressNo,
+        dieNo: item.dieNo,
+        material: item.material,
+        piecesPerCycle: item.piecesPerCycle,
+        cureTime: item.cureTime,
+      }));
+
+      setProductionConditions(fetchedConditions);
+      toast({
+        title: "Success",
+        description: `Loaded ${fetchedConditions.length} production conditions.`,
+      });
+
+    } catch (error) {
+      console.error("Failed to load production conditions:", error);
+      const description = error instanceof Error ? error.message : "Could not fetch conditions. Check the URL and try again.";
+      toast({
+        title: "Error Loading Conditions",
+        description: description,
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoadingConditions(false);
     }
   };
 
@@ -153,7 +207,11 @@ export default function Home() {
             onLoadTasks={handleLoadTasks}
             isLoading={isLoadingTasks}
           />
-          <ProductionConditionsPanel productionConditions={productionConditions} />
+          <ProductionConditionsPanel
+            productionConditions={productionConditions}
+            onLoadConditions={handleLoadProductionConditions}
+            isLoading={isLoadingConditions}
+          />
         </div>
         <div className="lg:w-2/3 flex-1 overflow-x-auto">
           <ScheduleGrid
