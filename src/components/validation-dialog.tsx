@@ -127,6 +127,13 @@ export const ValidationDialog: React.FC<ValidationDialogProps> = ({ request, pro
           const maxProducibleQty = maxCyclesInShift * condition.piecesPerCycle;
           const qty = Math.min(task.remainingQuantity, maxProducibleQty);
           
+          if (isNaN(qty)) {
+            toast({ title: "Calculation Error", description: "Could not calculate a valid quantity. Check the task and production data.", variant: "destructive" });
+            setValidationResult({isValid: false, reason: "Calculation error."})
+            setIsLoading(false);
+            return;
+          }
+
           setMaxPossibleQty(qty);
           setScheduledQuantity(String(qty));
           setSelectedCondition(condition);
