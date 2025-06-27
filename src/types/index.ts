@@ -47,6 +47,7 @@ export type Schedule = Record<string, ScheduledTask[]>; // key is shiftId
 export interface ValidationRequest {
   task: Task;
   shift: Shift;
+  pressNo: number;
 }
 
 export interface PressWorkload {

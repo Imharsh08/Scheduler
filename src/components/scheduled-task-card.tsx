@@ -5,16 +5,16 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { CheckCircle, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { getPressColorClass } from '@/lib/color-utils';
+import { getDieColorClass } from '@/lib/color-utils';
 import { format } from 'date-fns';
 
 interface ScheduledTaskCardProps {
   task: ScheduledTask;
-  pressColors: Record<number, string>;
+  dieColors: Record<number, string>;
 }
 
-export const ScheduledTaskCard: React.FC<ScheduledTaskCardProps> = ({ task, pressColors }) => {
-  const colorClass = getPressColorClass(task.pressNo, pressColors);
+export const ScheduledTaskCard: React.FC<ScheduledTaskCardProps> = ({ task, dieColors }) => {
+  const colorClass = getDieColorClass(task.dieNo, dieColors);
 
   const formatTime = (dateString: string) => {
     try {
@@ -25,7 +25,7 @@ export const ScheduledTaskCard: React.FC<ScheduledTaskCardProps> = ({ task, pres
   }
 
   return (
-    <Card className={cn("shadow-sm border", colorClass)}>
+    <Card className={cn("shadow-sm border-2", colorClass)}>
       <CardContent className="p-3">
         <div className="flex justify-between items-start">
             <div>

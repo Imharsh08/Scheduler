@@ -1,34 +1,38 @@
 
-// The original list of colors to be used as a fallback or default.
-const defaultColors = [
-  'bg-sky-100 border-sky-300',
-  'bg-emerald-100 border-emerald-300',
-  'bg-amber-100 border-amber-300',
-  'bg-rose-100 border-rose-300',
-  'bg-violet-100 border-violet-300',
-  'bg-lime-100 border-lime-300',
-  'bg-cyan-100 border-cyan-300',
-  'bg-fuchsia-100 border-fuchsia-300',
-  'bg-orange-100 border-orange-300',
-  'bg-teal-100 border-teal-300',
+export const COLOR_PALETTE = [
+  'bg-sky-200 border-sky-400',
+  'bg-emerald-200 border-emerald-400',
+  'bg-amber-200 border-amber-400',
+  'bg-rose-200 border-rose-400',
+  'bg-violet-200 border-violet-400',
+  'bg-lime-200 border-lime-400',
+  'bg-cyan-200 border-cyan-400',
+  'bg-fuchsia-200 border-fuchsia-400',
+  'bg-orange-200 border-orange-400',
+  'bg-teal-200 border-teal-400',
+  'bg-indigo-200 border-indigo-400',
+  'bg-yellow-200 border-yellow-400',
+  'bg-pink-200 border-pink-400',
+  'bg-slate-200 border-slate-400',
 ];
 
+
 /**
- * Gets the color class for a given press number.
- * It first checks for a user-defined color in the pressColors map.
+ * Gets the color class for a given die number.
+ * It first checks for a user-defined color in the dieColors map.
  * If not found, it falls back to a default, programmatically assigned color.
- * @param pressNo The press number.
- * @param pressColors An optional map of user-defined colors for presses.
+ * @param dieNo The die number.
+ * @param dieColors An optional map of user-defined colors for dies.
  * @returns A string of Tailwind CSS classes for the color.
  */
-export const getPressColorClass = (pressNo: number, pressColors?: Record<number, string>): string => {
+export const getDieColorClass = (dieNo: number, dieColors?: Record<number, string>): string => {
   // 1. Check for a user-defined color first.
-  if (pressColors && pressColors[pressNo]) {
-    return pressColors[pressNo];
+  if (dieColors && dieColors[dieNo]) {
+    return dieColors[dieNo];
   }
 
   // 2. Fallback to the default generative logic if no custom color is set.
   // Use a non-zero number for the modulo to avoid division by zero.
-  const index = pressNo > 0 ? (pressNo - 1) % defaultColors.length : 0;
-  return defaultColors[index];
+  const index = dieNo > 0 ? (dieNo - 1) % COLOR_PALETTE.length : 0;
+  return COLOR_PALETTE[index];
 };

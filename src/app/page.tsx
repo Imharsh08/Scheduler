@@ -36,7 +36,7 @@ export default function Home() {
   const [isIntegrationDialogOpen, setIsIntegrationDialogOpen] = useState(false);
   const [isColorSettingsDialogOpen, setIsColorSettingsDialogOpen] = useState(false);
   const [isProductionConditionsDialogOpen, setIsProductionConditionsDialogOpen] = useState(false);
-  const [pressColors, setPressColors] = useState<Record<number, string>>({});
+  const [dieColors, setDieColors] = useState<Record<number, string>>({});
 
   useEffect(() => {
     try {
@@ -47,9 +47,9 @@ export default function Home() {
         setIsIntegrationDialogOpen(true);
       }
 
-      const savedColors = localStorage.getItem('pressColors');
+      const savedColors = localStorage.getItem('dieColors');
       if (savedColors) {
-        setPressColors(JSON.parse(savedColors));
+        setDieColors(JSON.parse(savedColors));
       }
     } catch (error) {
       console.error("Failed to load data from localStorage", error);
@@ -217,7 +217,6 @@ export default function Home() {
         handleLoadProductionConditions(newUrls.conditions);
       }
 
-
       return newUrls;
 
     } catch (error) {
@@ -252,13 +251,13 @@ export default function Home() {
     }
   };
 
-  const handleSavePressColors = (newColors: Record<number, string>) => {
-    setPressColors(newColors);
+  const handleSaveDieColors = (newColors: Record<number, string>) => {
+    setDieColors(newColors);
     try {
-      localStorage.setItem('pressColors', JSON.stringify(newColors));
+      localStorage.setItem('dieColors', JSON.stringify(newColors));
       toast({
         title: "Colors Saved",
-        description: "Your press color settings have been updated.",
+        description: "Your die color settings have been updated.",
       });
     } catch (error) {
       console.error("Failed to save colors to localStorage", error);
@@ -315,14 +314,34 @@ export default function Home() {
 
   const handleDrop = (e: React.DragEvent<HTMLDivElement>, shiftId: string) => {
     e.preventDefault();
+    if (selectedPress === null) {
+        toast({
+            title: "Select a Press First",
+            description: "Please select a press from the workload panel to schedule a task.",
+            variant: "destructive"
+        });
+        return;
+    }
     const taskId = e.dataTransfer.getData('text/plain');
     const task = tasks.find((t) => t.jobCardNumber === taskId);
     const shift = shifts.find((s) => s.id === shiftId);
 
     if (task && shift) {
-      setValidationRequest({ task, shift });
+        const isTaskValidForPress = productionConditions.some(
+            pc => pc.itemCode === task.itemCode && pc.material === task.material && pc.pressNo === selectedPress
+        );
+
+        if (!isTaskValidForPress) {
+            toast({
+                title: "Incompatible Task",
+                description: `Task for item ${task.itemCode} cannot be run on Press ${selectedPress}.`,
+                variant: "destructive"
+            });
+            return;
+        }
+        setValidationRequest({ task, shift, pressNo: selectedPress });
     }
-  };
+};
 
   const handlePressSelect = (pressNo: number | null) => {
     setSelectedPress(pressNo);
@@ -339,6 +358,18 @@ export default function Home() {
     );
     return tasks.filter(task => validItemCodesForPress.has(task.itemCode));
   }, [tasks, selectedPress, productionConditions]);
+
+  const filteredSchedule = React.useMemo(() => {
+    if (selectedPress === null) {
+      return {};
+    }
+    const newSchedule: Schedule = {};
+    Object.keys(schedule).forEach(shiftId => {
+      const shiftTasks = schedule[shiftId] || [];
+      newSchedule[shiftId] = shiftTasks.filter(task => task.pressNo === selectedPress);
+    });
+    return newSchedule;
+  }, [schedule, selectedPress]);
 
 
   const handleValidationSuccess = (
@@ -441,9 +472,10 @@ export default function Home() {
             <div className="lg:w-2/3 flex-1 overflow-x-auto">
               <ScheduleGrid
                 shifts={shifts}
-                schedule={schedule}
+                schedule={filteredSchedule}
                 onDrop={handleDrop}
-                pressColors={pressColors}
+                dieColors={dieColors}
+                selectedPress={selectedPress}
               />
             </div>
         </div>
@@ -468,8 +500,8 @@ export default function Home() {
         open={isColorSettingsDialogOpen}
         onOpenChange={setIsColorSettingsDialogOpen}
         productionConditions={productionConditions}
-        pressColors={pressColors}
-        onSave={handleSavePressColors}
+        dieColors={dieColors}
+        onSave={handleSaveDieColors}
       />
       <ProductionConditionsDialog
         open={isProductionConditionsDialogOpen}

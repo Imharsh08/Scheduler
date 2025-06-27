@@ -7,9 +7,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Loader2, AlertCircle, ArrowLeft, Calendar, Clock } from 'lucide-react';
+import { Loader2, AlertCircle, ArrowLeft, Calendar } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
-import type { ValidationRequest, ProductionCondition, ScheduledTask, Task, Shift } from '@/types';
+import type { ValidationRequest, ProductionCondition, ScheduledTask, Shift } from '@/types';
 import { validatePressDieCombination, type ValidatePressDieCombinationOutput } from '@/ai/flows/validate-press-die-combination';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent } from '@/components/ui/card';
@@ -26,13 +26,12 @@ import {
   format,
 } from 'date-fns';
 
-
 interface ValidationDialogProps {
   request: ValidationRequest;
   productionConditions: ProductionCondition[];
   shifts: Shift[];
   onClose: () => void;
-  onSuccess: (scheduledItems: Omit<ScheduledTask, 'id' | 'startTime' | 'endTime'>[]) => void;
+  onSuccess: (scheduledItems: Omit<ScheduledTask, 'id'>[]) => void;
 }
 
 const dayIndexMap: Record<string, 0 | 1 | 2 | 3 | 4 | 5 | 6> = {
@@ -65,14 +64,12 @@ const getShiftStartDateTime = (shift: Shift): Date => {
 };
 
 export const ValidationDialog: React.FC<ValidationDialogProps> = ({ request, productionConditions, shifts, onClose, onSuccess }) => {
-  const { task, shift } = request;
+  const { task, shift, pressNo: preselectedPressNo } = request;
   const { toast } = useToast();
   
   const [step, setStep] = useState<'details' | 'select_operation' | 'confirm' | 'multi_shift_confirm'>('details');
 
-  const [pressNo, setPressNo] = useState('');
-  const [otherPressNo, setOtherPressNo] = useState('');
-  
+  const pressNo = String(preselectedPressNo);
   const [dieNo, setDieNo] = useState('');
   const [otherDieNo, setOtherDieNo] = useState('');
   
@@ -88,54 +85,33 @@ export const ValidationDialog: React.FC<ValidationDialogProps> = ({ request, pro
   
   const [multiShiftPlan, setMultiShiftPlan] = useState<Omit<ScheduledTask, 'id'>[] | null>(null);
 
-  const pressOptions = React.useMemo(() => {
-    const presses = productionConditions
-      .filter(pc => pc.itemCode === task.itemCode && pc.material === task.material)
-      .map(pc => pc.pressNo);
-    return [...new Set(presses)].map(p => String(p));
-  }, [productionConditions, task.itemCode, task.material]);
-
   const dieOptions = React.useMemo(() => {
-    if (!pressNo || pressNo === 'other') return [];
-    const selectedPress = parseInt(pressNo, 10);
+    if (!pressNo) return [];
+    const selectedPressNum = parseInt(pressNo, 10);
     const dies = productionConditions
       .filter(pc => 
           pc.itemCode === task.itemCode && 
           pc.material === task.material && 
-          pc.pressNo === selectedPress
+          pc.pressNo === selectedPressNum
       )
       .map(pc => pc.dieNo);
     return [...new Set(dies)].map(d => String(d));
   }, [productionConditions, task.itemCode, task.material, pressNo]);
 
-  const operationOptions = React.useMemo(() => {
-    if (!selectedCondition) return [];
-    const options = [];
-    if (selectedCondition.piecesPerCycle1 > 0) {
-      options.push({ value: '1', label: `One Side (${selectedCondition.piecesPerCycle1} pcs/cycle)` });
+  useEffect(() => {
+    // Auto-select die if only one option is available
+    if (dieOptions.length === 1) {
+        setDieNo(dieOptions[0]);
+    } else {
+        setDieNo('');
     }
-    if (selectedCondition.piecesPerCycle2 > 0) {
-      options.push({ value: '2', label: `Two Side (${selectedCondition.piecesPerCycle2} pcs/cycle)` });
-    }
-    return options;
-  }, [selectedCondition]);
+  }, [dieOptions]);
   
   useEffect(() => {
-    setDieNo('');
-    setOtherDieNo('');
     setValidationResult(null);
     setSelectedCondition(null);
     setOperationType('');
-    if (step !== 'details') {
-        setStep('details');
-    }
-  }, [pressNo]);
-
-  useEffect(() => {
-    setValidationResult(null);
-    setSelectedCondition(null);
-    setOperationType('');
-    if (step !== 'details') {
+    if (step !== 'details' && step !== 'select_operation') {
         setStep('details');
     }
   }, [dieNo]);
@@ -145,20 +121,19 @@ export const ValidationDialog: React.FC<ValidationDialogProps> = ({ request, pro
     setIsLoading(true);
     setValidationResult(null);
 
-    const finalPressNo = pressNo === 'other' ? otherPressNo : pressNo;
     const finalDieNo = dieNo === 'other' ? otherDieNo : dieNo;
 
-    if (!finalPressNo || !finalDieNo) {
-      toast({ title: "Input Required", description: "Please provide values for both Press and Die.", variant: "destructive" });
+    if (!finalDieNo) {
+      toast({ title: "Input Required", description: "Please provide a die number.", variant: "destructive" });
       setIsLoading(false);
       return;
     }
 
-    const press = parseInt(finalPressNo, 10);
+    const press = parseInt(pressNo, 10);
     const die = parseInt(finalDieNo, 10);
 
-    if (isNaN(press) || isNaN(die)) {
-      toast({ title: "Invalid Input", description: "Please enter valid numbers for Press and Die.", variant: "destructive" });
+    if (isNaN(die)) {
+      toast({ title: "Invalid Input", description: "Please enter a valid number for the die.", variant: "destructive" });
       setIsLoading(false);
       return;
     }
@@ -219,7 +194,7 @@ export const ValidationDialog: React.FC<ValidationDialogProps> = ({ request, pro
   const handleCalculateMultiShift = () => {
     if (!selectedCondition) return;
 
-    const finalPressNo = parseInt(pressNo === 'other' ? otherPressNo : pressNo, 10);
+    const finalPressNo = parseInt(pressNo, 10);
     const finalDieNo = parseInt(dieNo === 'other' ? otherDieNo : dieNo, 10);
     
     let remainingQtyToSchedule = parseInt(scheduledQuantity, 10);
@@ -297,7 +272,7 @@ export const ValidationDialog: React.FC<ValidationDialogProps> = ({ request, pro
         return;
     }
 
-    const finalPressNo = parseInt(pressNo === 'other' ? otherPressNo : pressNo, 10);
+    const finalPressNo = parseInt(pressNo, 10);
     const finalDieNo = parseInt(dieNo === 'other' ? otherDieNo : dieNo, 10);
 
     const timeUsedInShift = shift.capacity - shift.remainingCapacity;
@@ -346,7 +321,7 @@ export const ValidationDialog: React.FC<ValidationDialogProps> = ({ request, pro
   const getDialogDescription = () => {
     switch(step) {
       case 'details':
-        return `Select or enter Press and Die numbers for item ${task.itemCode} on ${shift.day} ${shift.type} Shift.`;
+        return `Select a die for item ${task.itemCode} on Press ${pressNo} for the ${shift.day} ${shift.type} Shift.`;
       case 'select_operation':
         return 'This combination is valid. Please select the type of operation to perform.';
       case 'confirm':
@@ -462,6 +437,17 @@ export const ValidationDialog: React.FC<ValidationDialogProps> = ({ request, pro
     );
   }
 
+  const operationOptions = React.useMemo(() => {
+    if (!selectedCondition) return [];
+    const options = [];
+    if (selectedCondition.piecesPerCycle1 > 0) {
+      options.push({ value: '1', label: `One Side (${selectedCondition.piecesPerCycle1} pcs/cycle)` });
+    }
+    if (selectedCondition.piecesPerCycle2 > 0) {
+      options.push({ value: '2', label: `Two Side (${selectedCondition.piecesPerCycle2} pcs/cycle)` });
+    }
+    return options;
+  }, [selectedCondition]);
 
   return (
     <Dialog open={true} onOpenChange={onClose}>
@@ -476,31 +462,22 @@ export const ValidationDialog: React.FC<ValidationDialogProps> = ({ request, pro
         {step === 'details' && (
           <form onSubmit={handleValidate}>
             <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-4 items-start gap-4">
-                <Label htmlFor="pressNo" className="text-right pt-2">Press No.</Label>
-                <div className="col-span-3">
-                  <Select value={pressNo} onValueChange={setPressNo}>
-                    <SelectTrigger id="pressNo"><SelectValue placeholder="Select a press..." /></SelectTrigger>
-                    <SelectContent>
-                      {pressOptions.map(option => <SelectItem key={option} value={option}>{option}</SelectItem>)}
-                      <SelectItem value="other">Other...</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  {pressNo === 'other' && (<Input id="otherPressNo" type="number" value={otherPressNo} onChange={e => setOtherPressNo(e.target.value)} placeholder="Enter Press No." className="mt-2" required />)}
-                </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="pressNo" className="text-right">Press No.</Label>
+                  <Input id="pressNo" value={pressNo} readOnly className="col-span-3 bg-secondary" />
               </div>
               <div className="grid grid-cols-4 items-start gap-4">
                 <Label htmlFor="dieNo" className="text-right pt-2">Die No.</Label>
                 <div className="col-span-3">
-                  <Select value={dieNo} onValueChange={setDieNo} disabled={!pressNo}>
-                    <SelectTrigger id="dieNo"><SelectValue placeholder={!pressNo ? "Select a press first" : "Select a die..."} /></SelectTrigger>
+                  <Select value={dieNo} onValueChange={setDieNo} disabled={dieOptions.length === 1}>
+                    <SelectTrigger id="dieNo"><SelectValue placeholder="Select a die..." /></SelectTrigger>
                     <SelectContent>
                       {dieOptions.map(option => <SelectItem key={option} value={option}>{option}</SelectItem>)}
                       <SelectItem value="other">Other...</SelectItem>
                     </SelectContent>
                   </Select>
                   {dieNo === 'other' && (<Input id="otherDieNo" type="number" value={otherDieNo} onChange={e => setOtherDieNo(e.target.value)} placeholder="Enter Die No." className="mt-2" required />)}
-                  {pressNo && pressNo !== 'other' && dieOptions.length === 0 && (<p className="text-xs text-muted-foreground mt-2 px-1">No predefined dies. Select "Other..." to enter manually.</p>)}
+                  {dieOptions.length === 0 && (<p className="text-xs text-muted-foreground mt-2 px-1">No predefined dies for this press/item. Select "Other..." to enter manually.</p>)}
                 </div>
               </div>
             </div>
@@ -513,7 +490,7 @@ export const ValidationDialog: React.FC<ValidationDialogProps> = ({ request, pro
              )}
             <DialogFooter className="mt-4">
               <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-              <Button type="submit" disabled={isLoading}>
+              <Button type="submit" disabled={isLoading || !dieNo}>
                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Validate
               </Button>

@@ -67,7 +67,7 @@ export const Header: React.FC<HeaderProps> = ({
             </DropdownMenuItem>
             <DropdownMenuItem onClick={onOpenColorSettingsDialog}>
               <Palette className="mr-2 h-4 w-4" />
-              <span>Color Settings</span>
+              <span>Die Color Settings</span>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
