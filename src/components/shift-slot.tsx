@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { ScheduledTaskCard } from './scheduled-task-card';
 import { Sun, Moon, Clock } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
+import { getPressColorClass } from '@/lib/color-utils';
 
 interface ShiftSlotProps {
   shift: Shift;
@@ -70,7 +71,7 @@ export const ShiftSlot: React.FC<ShiftSlotProps> = ({ shift, scheduledTasks, onD
         {scheduledTasks.length > 0 ? (
             <div className="space-y-2 pt-2">
                 {scheduledTasks.map(task => (
-                  <ScheduledTaskCard key={task.id} task={task} />
+                  <ScheduledTaskCard key={task.id} task={task} colorClass={getPressColorClass(task.pressNo)} />
                 ))}
             </div>
          ) : (

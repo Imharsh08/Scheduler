@@ -9,8 +9,10 @@ import { ProductionConditionsPanel } from '@/components/production-conditions-pa
 import { PressWorkloadPanel } from '@/components/press-workload-panel';
 import { ValidationDialog } from '@/components/validation-dialog';
 import { initialShifts, initialProductionConditions, initialTasks } from '@/lib/mock-data';
-import type { Task, Shift, Schedule, ProductionCondition, ScheduledTask, ValidationRequest } from '@/types';
+import type { Task, Shift, Schedule, ProductionCondition, ScheduledTask, ValidationRequest, IntegrationUrls } from '@/types';
 import { useToast } from "@/hooks/use-toast";
+import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
+import { IntegrationSidebar } from '@/components/integration-sidebar';
 
 export default function Home() {
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
@@ -21,15 +23,49 @@ export default function Home() {
   const [isLoadingTasks, setIsLoadingTasks] = useState(false);
   const [isLoadingConditions, setIsLoadingConditions] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [saveUrl, setSaveUrl] = useState('');
   const [selectedPress, setSelectedPress] = useState<number | null>(null);
   const { toast } = useToast();
 
-  const handleLoadTasks = async (url: string) => {
-    if (!url) {
+  const [urls, setUrls] = useState<IntegrationUrls>({
+    tasks: '',
+    conditions: '',
+    save: '',
+  });
+
+  useEffect(() => {
+    try {
+      const savedUrls = localStorage.getItem('integrationUrls');
+      if (savedUrls) {
+        setUrls(JSON.parse(savedUrls));
+      }
+    } catch (error) {
+      console.error("Failed to load URLs from localStorage", error);
+    }
+  }, []);
+
+  const handleSaveUrls = (newUrls: IntegrationUrls) => {
+    setUrls(newUrls);
+    try {
+      localStorage.setItem('integrationUrls', JSON.stringify(newUrls));
+      toast({
+        title: "Links Saved",
+        description: "Your integration links have been saved successfully.",
+      });
+    } catch (error) {
+      console.error("Failed to save URLs to localStorage", error);
+      toast({
+        title: "Error Saving Links",
+        description: "Could not save links to your browser's local storage.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleLoadTasks = async () => {
+    if (!urls.tasks) {
       toast({
         title: "URL Required",
-        description: "Please enter the Apps Script URL.",
+        description: "Please set the 'Unscheduled Tasks URL' in the sidebar.",
         variant: "destructive",
       });
       return;
@@ -37,7 +73,7 @@ export default function Home() {
 
     setIsLoadingTasks(true);
     try {
-      const proxyUrl = `/api/tasks?url=${encodeURIComponent(url)}`;
+      const proxyUrl = `/api/tasks?url=${encodeURIComponent(urls.tasks)}`;
       const response = await fetch(proxyUrl);
       const data = await response.json();
 
@@ -80,11 +116,11 @@ export default function Home() {
     }
   };
 
-  const handleLoadProductionConditions = async (url: string) => {
-    if (!url) {
+  const handleLoadProductionConditions = async () => {
+    if (!urls.conditions) {
       toast({
         title: "URL Required",
-        description: "Please enter the Production Conditions Apps Script URL.",
+        description: "Please set the 'Production Conditions URL' in the sidebar.",
         variant: "destructive",
       });
       return;
@@ -92,7 +128,7 @@ export default function Home() {
 
     setIsLoadingConditions(true);
     try {
-      const proxyUrl = `/api/tasks?url=${encodeURIComponent(url)}`;
+      const proxyUrl = `/api/tasks?url=${encodeURIComponent(urls.conditions)}`;
       const response = await fetch(proxyUrl);
       const data = await response.json();
 
@@ -140,8 +176,8 @@ export default function Home() {
       toast({ title: "Nothing to Save", description: "The schedule is empty." });
       return;
     }
-    if (!saveUrl) {
-      toast({ title: "URL Required", description: "Please provide the 'Molding Sheet' save URL in the tasks panel.", variant: "destructive" });
+    if (!urls.save) {
+      toast({ title: "URL Required", description: "Please provide the 'Save Schedule URL' in the sidebar.", variant: "destructive" });
       return;
     }
 
@@ -150,7 +186,7 @@ export default function Home() {
       const response = await fetch('/api/schedule', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sheetUrl: saveUrl, schedule }),
+        body: JSON.stringify({ sheetUrl: urls.save, schedule }),
       });
       const result = await response.json();
       if (!response.ok) {
@@ -227,7 +263,7 @@ export default function Home() {
       const scheduledTask: ScheduledTask = { ...item, id: newId };
       totalQuantityScheduled += item.scheduledQuantity;
 
-      const currentShiftTasks = scheduleUpdates.get(item.shiftId) || [];
+      const currentShiftTasks = scheduleUpdates.get(item.shiftId) || schedule[item.shiftId] || [];
       scheduleUpdates.set(item.shiftId, [...currentShiftTasks, scheduledTask]);
 
       const timeUpdate = shiftCapacityUpdates.get(item.shiftId) || 0;
@@ -237,7 +273,7 @@ export default function Home() {
     setSchedule((currentSchedule) => {
       const newSchedule = { ...currentSchedule };
       for (const [shiftId, tasksToAdd] of scheduleUpdates.entries()) {
-        newSchedule[shiftId] = [...(newSchedule[shiftId] || []), ...tasksToAdd];
+        newSchedule[shiftId] = tasksToAdd;
       }
       return newSchedule;
     });
@@ -266,39 +302,47 @@ export default function Home() {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-background text-foreground">
-      <Header onSave={handleSaveSchedule} isSaving={isSaving} />
-      <main className="flex-1 flex flex-col lg:flex-row gap-6 p-4 lg:p-6 overflow-hidden">
-        <div className="lg:w-1/3 flex flex-col gap-6 overflow-y-auto pr-2">
-           <PressWorkloadPanel
-            tasks={tasks}
-            schedule={schedule}
-            productionConditions={productionConditions}
-            onPressSelect={handlePressSelect}
-            selectedPress={selectedPress}
+    <SidebarProvider>
+      <div className="flex flex-col h-screen bg-background text-foreground">
+        <Header onSave={handleSaveSchedule} isSaving={isSaving} />
+        <div className="flex-1 flex flex-row min-h-0">
+          <IntegrationSidebar 
+            urls={urls}
+            onSaveUrls={handleSaveUrls}
           />
-          <TaskList
-            tasks={filteredTasks}
-            onDragStart={handleDragStart}
-            onLoadTasks={handleLoadTasks}
-            isLoading={isLoadingTasks}
-            saveUrl={saveUrl}
-            onSaveUrlChange={setSaveUrl}
-          />
-          <ProductionConditionsPanel
-            productionConditions={productionConditions}
-            onLoadConditions={handleLoadProductionConditions}
-            isLoading={isLoadingConditions}
-          />
+          <SidebarInset>
+            <main className="flex-1 flex flex-col lg:flex-row gap-6 p-4 lg:p-6 overflow-hidden">
+              <div className="lg:w-1/3 flex flex-col gap-6 overflow-y-auto pr-2">
+                <PressWorkloadPanel
+                  tasks={tasks}
+                  schedule={schedule}
+                  productionConditions={productionConditions}
+                  onPressSelect={handlePressSelect}
+                  selectedPress={selectedPress}
+                />
+                <TaskList
+                  tasks={filteredTasks}
+                  onDragStart={handleDragStart}
+                  onLoadTasks={handleLoadTasks}
+                  isLoading={isLoadingTasks}
+                />
+                <ProductionConditionsPanel
+                  productionConditions={productionConditions}
+                  onLoadConditions={handleLoadProductionConditions}
+                  isLoading={isLoadingConditions}
+                />
+              </div>
+              <div className="lg:w-2/3 flex-1 overflow-x-auto">
+                <ScheduleGrid
+                  shifts={shifts}
+                  schedule={schedule}
+                  onDrop={handleDrop}
+                />
+              </div>
+            </main>
+          </SidebarInset>
         </div>
-        <div className="lg:w-2/3 flex-1 overflow-x-auto">
-          <ScheduleGrid
-            shifts={shifts}
-            schedule={schedule}
-            onDrop={handleDrop}
-          />
-        </div>
-      </main>
+      </div>
       {validationRequest && (
         <ValidationDialog
           request={validationRequest}
@@ -308,6 +352,6 @@ export default function Home() {
           onSuccess={handleValidationSuccess}
         />
       )}
-    </div>
+    </SidebarProvider>
   );
 }

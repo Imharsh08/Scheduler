@@ -52,3 +52,9 @@ export interface PressWorkload {
   pendingQuantity: number;
   scheduledQuantity: number;
 }
+
+export interface IntegrationUrls {
+  tasks: string;
+  conditions: string;
+  save: string;
+}

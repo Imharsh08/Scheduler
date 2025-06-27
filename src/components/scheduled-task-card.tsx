@@ -3,25 +3,27 @@ import type { ScheduledTask } from '@/types';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { CheckCircle, Clock } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface ScheduledTaskCardProps {
   task: ScheduledTask;
+  colorClass: string;
 }
 
-export const ScheduledTaskCard: React.FC<ScheduledTaskCardProps> = ({ task }) => {
+export const ScheduledTaskCard: React.FC<ScheduledTaskCardProps> = ({ task, colorClass }) => {
   return (
-    <Card className="bg-background/80 shadow-sm">
+    <Card className={cn("shadow-sm border", colorClass)}>
       <CardContent className="p-3">
         <div className="flex justify-between items-start">
             <div>
-                <p className="font-bold text-sm">{task.jobCardNumber}</p>
+                <p className="font-bold text-sm text-gray-800">{task.jobCardNumber}</p>
                 <p className="text-xs text-muted-foreground">{task.itemCode}</p>
             </div>
             <Badge variant="outline" className="text-xs">{task.material}</Badge>
         </div>
-        <div className="flex justify-between items-center mt-2 text-xs">
+        <div className="flex justify-between items-center mt-2 text-xs text-gray-700">
             <div className="flex items-center gap-1">
-                <CheckCircle className="w-3 h-3 text-green-500" />
+                <CheckCircle className="w-3 h-3 text-green-600" />
                 <span>Qty: {task.scheduledQuantity}</span>
             </div>
             <div className="flex items-center gap-1">

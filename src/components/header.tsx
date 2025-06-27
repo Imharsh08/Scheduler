@@ -1,6 +1,7 @@
 import React from 'react';
 import { Factory, Save, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { SidebarTrigger } from '@/components/ui/sidebar';
 
 interface HeaderProps {
   onSave: () => void;
@@ -9,10 +10,11 @@ interface HeaderProps {
 
 export const Header: React.FC<HeaderProps> = ({ onSave, isSaving }) => {
   return (
-    <header className="flex items-center justify-between p-4 border-b bg-primary/10">
+    <header className="flex items-center justify-between p-4 border-b bg-card shadow-sm">
       <div className="flex items-center gap-3">
-        <Factory className="w-8 h-8 text-primary-foreground" />
-        <h1 className="text-2xl font-bold text-primary-foreground font-headline">
+        <SidebarTrigger />
+        <Factory className="w-8 h-8 text-primary" />
+        <h1 className="text-2xl font-bold text-foreground font-headline">
           ProSched
         </h1>
       </div>
