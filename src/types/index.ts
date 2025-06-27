@@ -1,11 +1,13 @@
+
 export interface Task {
   jobCardNumber: string;
   orderedQuantity: number;
   itemCode: string;
   material: string;
   remainingQuantity: number;
-  isPriority?: boolean;
+  priority: 'High' | 'Normal' | 'Low' | 'None';
   creationDate: string; // ISO 8601 date string
+  deliveryDate?: string | null; // ISO 8601 date string
 }
 
 export interface ProductionCondition {

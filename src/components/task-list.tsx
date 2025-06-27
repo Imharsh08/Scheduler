@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import type { Task } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -17,13 +18,34 @@ export const TaskList: React.FC<TaskListProps> = ({ tasks, onDragStart, onLoadTa
   const [url, setUrl] = useState('');
 
   const sortedTasks = React.useMemo(() => {
+    const priorityOrder: Record<Task['priority'], number> = {
+      'High': 1,
+      'Normal': 2,
+      'Low': 3,
+      'None': 4,
+    };
+
     return [...tasks].sort((a, b) => {
-      const priorityA = a.isPriority ? 1 : 0;
-      const priorityB = b.isPriority ? 1 : 0;
+      // 1. Sort by priority
+      const priorityA = priorityOrder[a.priority];
+      const priorityB = priorityOrder[b.priority];
       if (priorityA !== priorityB) {
-        return priorityB - priorityA;
+        return priorityA - priorityB;
       }
-      // If priorities are the same, sort by creation date (oldest first)
+      
+      // 2. Sort by delivery date (earliest first)
+      if (a.deliveryDate && b.deliveryDate) {
+        const dateA = new Date(a.deliveryDate).getTime();
+        const dateB = new Date(b.deliveryDate).getTime();
+        if (dateA !== dateB) {
+          return dateA - dateB;
+        }
+      }
+      // If one has a delivery date and the other doesn't, the one with the date comes first
+      if (a.deliveryDate && !b.deliveryDate) return -1;
+      if (!a.deliveryDate && b.deliveryDate) return 1;
+
+      // 3. Sort by creation date (oldest first)
       return new Date(a.creationDate).getTime() - new Date(b.creationDate).getTime();
     });
   }, [tasks]);

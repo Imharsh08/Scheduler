@@ -1,8 +1,10 @@
+
 /**
  * Google Apps Script for ProSched Application
  *
- * This script is designed to work with your existing "FMS 2" sheet headers.
- * It will map your columns to the data structure needed by the ProSched app.
+ * This script is designed to work with your "FMS 2" sheet headers.
+ * It will map your columns to the data structure needed by the ProSched app,
+ * including priority levels and delivery dates.
  *
  * How to use:
  * 1. Open your Google Sheet that contains the "FMS 2" data.
@@ -14,11 +16,12 @@
  *    - Order qty
  *    - Type_Model_MOC code
  *    - MOC
- *    - Emergency PO
+ *    - Emergency PO (containing "High", "Normal", or "Low")
+ *    - Rqstd Delivery date
  * 5. Create another (or ensure you have a) sheet named "Molding Sheet". It will be used for saving data later.
  * 6. Click "Deploy" > "New deployment".
  * 7. For "Select type", choose "Web app".
- * 8. In "Configuration", give it a description (e.g., "ProSched API").
+ * 8. In "Configuration", give it a description (e.g., "ProSched API v2").
  * 9. For "Who has access", select "Anyone". **This is crucial for the app to access it.**
  * 10. Click "Deploy".
  * 11. Authorize the script when prompted.
@@ -29,12 +32,13 @@
 // --- Column Header Configuration ---
 // This section maps the headers from your sheet to the fields the app expects.
 const HEADER_MAPPING = {
+  creationDate: 'Date',
   jobCardNumber: 'Job Card No.',
   orderedQuantity: 'Order qty',
   itemCode: 'Type_Model_MOC code',
   material: 'MOC',
-  isPriority: 'Emergency PO',
-  creationDate: 'Date'
+  priority: 'Emergency PO',
+  deliveryDate: 'Rqstd Delivery date',
 };
 // --- End Configuration ---
 
@@ -80,11 +84,24 @@ function doGet(e) {
         var index = headerIndices[key];
         var value = row[index];
         
-        if (key === 'creationDate' && value instanceof Date) {
-          task[key] = value.toISOString();
-        } else if (key === 'isPriority') {
-           // Treat non-empty/TRUE values in 'Emergency PO' as priority
-           task[key] = (value === true || String(value).toUpperCase() === 'TRUE' || value !== '');
+        if ((key === 'creationDate' || key === 'deliveryDate') && value instanceof Date) {
+          // Check if date is valid before converting
+          if (!isNaN(value.getTime())) {
+            task[key] = value.toISOString();
+          } else {
+            task[key] = null;
+          }
+        } else if (key === 'priority') {
+           var priorityValue = String(value || '').trim().toLowerCase();
+           if (priorityValue === 'high') {
+             task[key] = 'High';
+           } else if (priorityValue === 'normal') {
+             task[key] = 'Normal';
+           } else if (priorityValue === 'low') {
+             task[key] = 'Low';
+           } else {
+             task[key] = 'None';
+           }
         } else {
           task[key] = value;
         }

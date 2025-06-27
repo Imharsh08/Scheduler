@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -43,8 +44,9 @@ export default function Home() {
         itemCode: item.itemCode,
         material: item.material,
         remainingQuantity: item.orderedQuantity,
-        isPriority: item.isPriority === true || item.isPriority === 'TRUE',
+        priority: item.priority || 'None',
         creationDate: item.creationDate ? new Date(item.creationDate).toISOString() : new Date().toISOString(),
+        deliveryDate: item.deliveryDate ? new Date(item.deliveryDate).toISOString() : null,
       }));
 
       setTasks(fetchedTasks);
@@ -107,13 +109,13 @@ export default function Home() {
 
     // Add the task to the schedule with a unique batch ID
     setSchedule((prevSchedule) => {
+      const newSchedule = { ...prevSchedule };
       const { jobCardNumber } = scheduledTaskDetails;
 
-      // Count existing batches for this job card across all shifts to determine the new suffix
-      const batchCount = Object.values(prevSchedule)
+      const batchCount = Object.values(newSchedule)
         .flat()
         .filter((st) => st.jobCardNumber === jobCardNumber).length;
-
+      
       const batchSuffix = String.fromCharCode('A'.charCodeAt(0) + batchCount);
       const newId = `${jobCardNumber}-${batchSuffix}`;
 
@@ -121,15 +123,11 @@ export default function Home() {
         ...scheduledTaskDetails,
         id: newId,
       };
-
-      // Create a new array for the target shift's tasks, including the new one
-      const newShiftTasks = [...(prevSchedule[shift.id] || []), scheduledTask];
-
-      // Return a new schedule object with the updated shift
-      return {
-        ...prevSchedule,
-        [shift.id]: newShiftTasks,
-      };
+      
+      const newShiftTasks = [...(newSchedule[shift.id] || []), scheduledTask];
+      
+      newSchedule[shift.id] = newShiftTasks;
+      return newSchedule;
     });
 
     setValidationRequest(null);
