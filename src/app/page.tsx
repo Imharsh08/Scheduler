@@ -13,6 +13,8 @@ import { useToast } from "@/hooks/use-toast";
 import { IntegrationDialog } from '@/components/integration-dialog';
 import { ColorSettingsDialog } from '@/components/color-settings-dialog';
 import { ProductionConditionsDialog } from '@/components/production-conditions-dialog';
+import { AllScheduledTasksDialog } from '@/components/all-scheduled-tasks-dialog';
+import { generateSchedulePdf } from '@/lib/pdf-utils';
 
 export default function Home() {
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
@@ -36,6 +38,7 @@ export default function Home() {
   const [isIntegrationDialogOpen, setIsIntegrationDialogOpen] = useState(false);
   const [isColorSettingsDialogOpen, setIsColorSettingsDialogOpen] = useState(false);
   const [isProductionConditionsDialogOpen, setIsProductionConditionsDialogOpen] = useState(false);
+  const [isAllTasksDialogOpen, setIsAllTasksDialogOpen] = useState(false);
   const [dieColors, setDieColors] = useState<Record<number, string>>({});
 
   useEffect(() => {
@@ -478,6 +481,13 @@ export default function Home() {
     handleLoadProductionConditions();
   };
 
+  const pressNumbers = React.useMemo(() => {
+    return [...new Set(productionConditions.map(pc => pc.pressNo))].sort((a,b) => a - b);
+  }, [productionConditions]);
+
+  const handleDownloadPdf = (pressNo: 'all' | number) => {
+    generateSchedulePdf(pressNo, scheduleByPress, shiftsByPress);
+  }
 
   return (
     <div className="flex flex-col h-screen bg-background text-foreground">
@@ -488,6 +498,9 @@ export default function Home() {
         onOpenColorSettingsDialog={() => setIsColorSettingsDialogOpen(true)}
         onOpenProductionConditionsDialog={() => setIsProductionConditionsDialogOpen(true)}
         onRefreshData={handleRefreshData}
+        onViewAllTasksClick={() => setIsAllTasksDialogOpen(true)}
+        onDownloadPdfClick={handleDownloadPdf}
+        pressNumbers={pressNumbers}
       />
       <main className="flex-1 flex flex-col gap-4 p-4 lg:p-6 overflow-hidden">
         <PressWorkloadPanel
@@ -548,6 +561,12 @@ export default function Home() {
         onOpenChange={setIsProductionConditionsDialogOpen}
         productionConditions={productionConditions}
         isLoading={isLoadingConditions}
+      />
+       <AllScheduledTasksDialog
+        open={isAllTasksDialogOpen}
+        onOpenChange={setIsAllTasksDialogOpen}
+        scheduleByPress={scheduleByPress}
+        shiftsByPress={shiftsByPress}
       />
     </div>
   );

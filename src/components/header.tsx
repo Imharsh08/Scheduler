@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Factory, Save, Loader2, Settings, Menu, Palette, RefreshCw, Settings2 } from 'lucide-react';
+import { Factory, Save, Loader2, Settings, Menu, Palette, RefreshCw, Settings2, GanttChartSquare, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -8,6 +8,10 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
+  DropdownMenuPortal,
 } from "@/components/ui/dropdown-menu"
 
 interface HeaderProps {
@@ -17,6 +21,9 @@ interface HeaderProps {
   onOpenColorSettingsDialog: () => void;
   onOpenProductionConditionsDialog: () => void;
   onRefreshData: () => void;
+  onViewAllTasksClick: () => void;
+  onDownloadPdfClick: (pressNo: 'all' | number) => void;
+  pressNumbers: number[];
 }
 
 export const Header: React.FC<HeaderProps> = ({ 
@@ -25,7 +32,10 @@ export const Header: React.FC<HeaderProps> = ({
     onOpenIntegrationDialog, 
     onOpenColorSettingsDialog, 
     onOpenProductionConditionsDialog,
-    onRefreshData 
+    onRefreshData,
+    onViewAllTasksClick,
+    onDownloadPdfClick,
+    pressNumbers,
 }) => {
   return (
     <header className="flex items-center justify-between p-4 border-b bg-card shadow-sm">
@@ -35,7 +45,31 @@ export const Header: React.FC<HeaderProps> = ({
           ProSched
         </h1>
       </div>
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-2">
+        <Button variant="outline" onClick={onViewAllTasksClick}>
+            <GanttChartSquare className="mr-2 h-4 w-4" />
+            View All
+        </Button>
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+                <Button variant="outline">
+                    <Download className="mr-2 h-4 w-4" />
+                    Download
+                </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => onDownloadPdfClick('all')}>
+                    All Presses
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                {pressNumbers.map(pressNo => (
+                    <DropdownMenuItem key={pressNo} onClick={() => onDownloadPdfClick(pressNo)}>
+                        Press {pressNo}
+                    </DropdownMenuItem>
+                ))}
+                {pressNumbers.length === 0 && <DropdownMenuItem disabled>No presses available</DropdownMenuItem>}
+            </DropdownMenuContent>
+        </DropdownMenu>
         <Button onClick={onSave} disabled={isSaving}>
             {isSaving ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />

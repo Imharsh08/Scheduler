@@ -33,6 +33,7 @@ export interface ScheduledTask {
   jobCardNumber: string;
   itemCode: string;
   material: string;
+  priority: Task['priority'];
   scheduledQuantity: number;
   pressNo: number;
   dieNo: number;
