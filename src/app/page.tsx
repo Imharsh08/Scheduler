@@ -55,6 +55,117 @@ export default function Home() {
     }
   }, []);
 
+  const handleLoadTasks = async (taskUrl?: string) => {
+    const urlToUse = taskUrl || urls.tasks;
+    if (!urlToUse) {
+      toast({
+        title: "Task URL Not Set",
+        description: "Please set your Configuration URL and load the links first.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsLoadingTasks(true);
+    try {
+      const proxyUrl = `/api/tasks?url=${encodeURIComponent(urlToUse)}`;
+      const response = await fetch(proxyUrl);
+      const data = await response.json();
+
+      if (!response.ok) {
+        const errorMessage = data.details || data.error || `Request failed with status: ${response.status}`;
+        throw new Error(errorMessage);
+      }
+      
+      if (data.error) {
+        throw new Error(`Error from Google Script: ${data.error}`);
+      }
+
+      const fetchedTasks: Task[] = data.map((item: any) => ({
+        jobCardNumber: item.jobCardNumber,
+        orderedQuantity: item.orderedQuantity,
+        itemCode: item.itemCode,
+        material: item.material,
+        remainingQuantity: item.orderedQuantity,
+        priority: item.priority || 'None',
+        creationDate: item.creationDate ? new Date(item.creationDate).toISOString() : new Date().toISOString(),
+        deliveryDate: item.deliveryDate ? new Date(item.deliveryDate).toISOString() : null,
+      }));
+
+      setTasks(fetchedTasks);
+      toast({
+        title: "Success",
+        description: `Loaded ${fetchedTasks.length} tasks successfully.`,
+      });
+
+    } catch (error) {
+      console.error("Failed to load tasks:", error);
+      const description = error instanceof Error ? error.message : "Could not fetch tasks. Check the URL and try again.";
+      toast({
+        title: "Error Loading Tasks",
+        description: description,
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoadingTasks(false);
+    }
+  };
+
+  const handleLoadProductionConditions = async (conditionUrl?: string) => {
+    const urlToUse = conditionUrl || urls.conditions;
+    if (!urlToUse) {
+      toast({
+        title: "Conditions URL Not Set",
+        description: "Please set your Configuration URL and load the links first.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsLoadingConditions(true);
+    try {
+      const proxyUrl = `/api/tasks?url=${encodeURIComponent(urlToUse)}`;
+      const response = await fetch(proxyUrl);
+      const data = await response.json();
+
+      if (!response.ok) {
+        const errorMessage = data.details || data.error || `Request failed with status: ${response.status}`;
+        throw new Error(errorMessage);
+      }
+      
+      if (data.error) {
+        throw new Error(`Error from Google Script: ${data.error}`);
+      }
+
+      const fetchedConditions: ProductionCondition[] = data.map((item: any) => ({
+        itemCode: item.itemCode,
+        pressNo: item.pressNo,
+        dieNo: item.dieNo,
+        material: item.material,
+        piecesPerCycle1: item.piecesPerCycle1 || 0,
+        piecesPerCycle2: item.piecesPerCycle2 || 0,
+        cureTime: item.cureTime,
+      }));
+
+      setProductionConditions(fetchedConditions);
+      toast({
+        title: "Success",
+        description: `Loaded ${fetchedConditions.length} production conditions.`,
+      });
+
+    } catch (error) {
+      console.error("Failed to load production conditions:", error);
+      const description = error instanceof Error ? error.message : "Could not fetch conditions. Check the URL and try again.";
+      toast({
+        title: "Error Loading Conditions",
+        description: description,
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoadingConditions(false);
+    }
+  };
+
   const handleLoadUrlsFromSheet = async (configUrl: string) => {
     if (!configUrl) {
       toast({ title: "URL Required", description: "Please enter the Configuration URL.", variant: "destructive" });
@@ -94,8 +205,17 @@ export default function Home() {
       handleSaveUrls(newUrls);
       toast({
         title: "Configuration Loaded",
-        description: "Successfully loaded and saved new integration links.",
+        description: "Loading associated data automatically...",
       });
+
+      // Automatically load data after successful config load
+      if (newUrls.tasks) {
+        handleLoadTasks(newUrls.tasks);
+      }
+      if (newUrls.conditions) {
+        handleLoadProductionConditions(newUrls.conditions);
+      }
+
 
       return newUrls;
 
@@ -146,115 +266,6 @@ export default function Home() {
         description: "Could not save color settings to your browser's local storage.",
         variant: "destructive",
       });
-    }
-  };
-
-  const handleLoadTasks = async () => {
-    if (!urls.tasks) {
-      toast({
-        title: "Task URL Not Set",
-        description: "Please set your Configuration URL and load the links first.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setIsLoadingTasks(true);
-    try {
-      const proxyUrl = `/api/tasks?url=${encodeURIComponent(urls.tasks)}`;
-      const response = await fetch(proxyUrl);
-      const data = await response.json();
-
-      if (!response.ok) {
-        const errorMessage = data.details || data.error || `Request failed with status: ${response.status}`;
-        throw new Error(errorMessage);
-      }
-      
-      if (data.error) {
-        throw new Error(`Error from Google Script: ${data.error}`);
-      }
-
-      const fetchedTasks: Task[] = data.map((item: any) => ({
-        jobCardNumber: item.jobCardNumber,
-        orderedQuantity: item.orderedQuantity,
-        itemCode: item.itemCode,
-        material: item.material,
-        remainingQuantity: item.orderedQuantity,
-        priority: item.priority || 'None',
-        creationDate: item.creationDate ? new Date(item.creationDate).toISOString() : new Date().toISOString(),
-        deliveryDate: item.deliveryDate ? new Date(item.deliveryDate).toISOString() : null,
-      }));
-
-      setTasks(fetchedTasks);
-      toast({
-        title: "Success",
-        description: `Loaded ${fetchedTasks.length} tasks successfully.`,
-      });
-
-    } catch (error) {
-      console.error("Failed to load tasks:", error);
-      const description = error instanceof Error ? error.message : "Could not fetch tasks. Check the URL and try again.";
-      toast({
-        title: "Error Loading Tasks",
-        description: description,
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoadingTasks(false);
-    }
-  };
-
-  const handleLoadProductionConditions = async () => {
-    if (!urls.conditions) {
-      toast({
-        title: "Conditions URL Not Set",
-        description: "Please set your Configuration URL and load the links first.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setIsLoadingConditions(true);
-    try {
-      const proxyUrl = `/api/tasks?url=${encodeURIComponent(urls.conditions)}`;
-      const response = await fetch(proxyUrl);
-      const data = await response.json();
-
-      if (!response.ok) {
-        const errorMessage = data.details || data.error || `Request failed with status: ${response.status}`;
-        throw new Error(errorMessage);
-      }
-      
-      if (data.error) {
-        throw new Error(`Error from Google Script: ${data.error}`);
-      }
-
-      const fetchedConditions: ProductionCondition[] = data.map((item: any) => ({
-        itemCode: item.itemCode,
-        pressNo: item.pressNo,
-        dieNo: item.dieNo,
-        material: item.material,
-        piecesPerCycle1: item.piecesPerCycle1 || 0,
-        piecesPerCycle2: item.piecesPerCycle2 || 0,
-        cureTime: item.cureTime,
-      }));
-
-      setProductionConditions(fetchedConditions);
-      toast({
-        title: "Success",
-        description: `Loaded ${fetchedConditions.length} production conditions.`,
-      });
-
-    } catch (error) {
-      console.error("Failed to load production conditions:", error);
-      const description = error instanceof Error ? error.message : "Could not fetch conditions. Check the URL and try again.";
-      toast({
-        title: "Error Loading Conditions",
-        description: description,
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoadingConditions(false);
     }
   };
 
@@ -389,6 +400,16 @@ export default function Home() {
     setValidationRequest(null);
   };
 
+  const handleRefreshData = () => {
+    toast({
+      title: "Refreshing Data...",
+      description: "Fetching the latest tasks and conditions.",
+    });
+    handleLoadTasks();
+    handleLoadProductionConditions();
+  };
+
+
   return (
     <div className="flex flex-col h-screen bg-background text-foreground">
       <Header
@@ -396,6 +417,7 @@ export default function Home() {
         isSaving={isSaving}
         onOpenIntegrationDialog={() => setIsIntegrationDialogOpen(true)}
         onOpenColorSettingsDialog={() => setIsColorSettingsDialogOpen(true)}
+        onRefreshData={handleRefreshData}
       />
       <main className="flex-1 flex flex-col gap-4 p-4 lg:p-6 overflow-hidden">
         <PressWorkloadPanel

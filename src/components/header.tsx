@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Factory, Save, Loader2, Settings, Menu, Palette } from 'lucide-react';
+import { Factory, Save, Loader2, Settings, Menu, Palette, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -15,9 +15,10 @@ interface HeaderProps {
   isSaving: boolean;
   onOpenIntegrationDialog: () => void;
   onOpenColorSettingsDialog: () => void;
+  onRefreshData: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ onSave, isSaving, onOpenIntegrationDialog, onOpenColorSettingsDialog }) => {
+export const Header: React.FC<HeaderProps> = ({ onSave, isSaving, onOpenIntegrationDialog, onOpenColorSettingsDialog, onRefreshData }) => {
   return (
     <header className="flex items-center justify-between p-4 border-b bg-card shadow-sm">
       <div className="flex items-center gap-3">
@@ -46,6 +47,10 @@ export const Header: React.FC<HeaderProps> = ({ onSave, isSaving, onOpenIntegrat
             <DropdownMenuItem onClick={onOpenIntegrationDialog}>
               <Settings className="mr-2 h-4 w-4" />
               <span>Integrations</span>
+            </DropdownMenuItem>
+             <DropdownMenuItem onClick={onRefreshData}>
+              <RefreshCw className="mr-2 h-4 w-4" />
+              <span>Refresh Data</span>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={onOpenColorSettingsDialog}>
