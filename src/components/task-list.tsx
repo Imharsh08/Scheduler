@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import type { Task } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { TaskCard } from './task-card';
-import { ListTodo, Download, Loader2 } from 'lucide-react';
+import { ListTodo, Download, Loader2, KeyRound } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 
@@ -12,9 +12,11 @@ interface TaskListProps {
   onDragStart: (e: React.DragEvent<HTMLDivElement>, taskId: string) => void;
   onLoadTasks: (url: string) => void;
   isLoading: boolean;
+  saveUrl: string;
+  onSaveUrlChange: (url: string) => void;
 }
 
-export const TaskList: React.FC<TaskListProps> = ({ tasks, onDragStart, onLoadTasks, isLoading }) => {
+export const TaskList: React.FC<TaskListProps> = ({ tasks, onDragStart, onLoadTasks, isLoading, saveUrl, onSaveUrlChange }) => {
   const [url, setUrl] = useState('');
 
   const sortedTasks = React.useMemo(() => {
@@ -60,7 +62,7 @@ export const TaskList: React.FC<TaskListProps> = ({ tasks, onDragStart, onLoadTa
         <div className="flex w-full items-center space-x-2 mb-4">
           <Input
             type="url"
-            placeholder="FMS 2 Sheet Web App URL"
+            placeholder="FMS 2 Sheet URL (Load Tasks)"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             disabled={isLoading}
@@ -70,7 +72,18 @@ export const TaskList: React.FC<TaskListProps> = ({ tasks, onDragStart, onLoadTa
             Load
           </Button>
         </div>
-        <div className="space-y-4 max-h-[calc(100vh-450px)] overflow-y-auto pr-2">
+        <div className="flex w-full items-center space-x-2 mb-4">
+            <Input
+              type="url"
+              placeholder="Molding Sheet URL (Save Schedule)"
+              value={saveUrl}
+              onChange={(e) => onSaveUrlChange(e.target.value)}
+            />
+             <div className="p-2 rounded-md border bg-secondary">
+               <KeyRound className="w-4 h-4 text-muted-foreground" />
+             </div>
+        </div>
+        <div className="space-y-4 max-h-[calc(100vh-550px)] overflow-y-auto pr-2">
           {isLoading && tasks.length === 0 ? (
              <div className="flex justify-center items-center py-4">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -80,7 +93,7 @@ export const TaskList: React.FC<TaskListProps> = ({ tasks, onDragStart, onLoadTa
               <TaskCard key={task.jobCardNumber} task={task} onDragStart={onDragStart} />
             ))
           ) : (
-            <p className="text-muted-foreground text-center py-4">No tasks loaded. Enter URL and click Load.</p>
+            <p className="text-muted-foreground text-center py-4">No tasks loaded or matching filter.</p>
           )}
         </div>
       </CardContent>

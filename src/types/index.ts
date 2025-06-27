@@ -37,6 +37,7 @@ export interface ScheduledTask {
   pressNo: number;
   dieNo: number;
   timeTaken: number; // in minutes
+  shiftId: string;
 }
 
 export type Schedule = Record<string, ScheduledTask[]>; // key is shiftId
@@ -44,4 +45,10 @@ export type Schedule = Record<string, ScheduledTask[]>; // key is shiftId
 export interface ValidationRequest {
   task: Task;
   shift: Shift;
+}
+
+export interface PressWorkload {
+  pressNo: number;
+  pendingQuantity: number;
+  scheduledQuantity: number;
 }

@@ -6,6 +6,7 @@ import { Header } from '@/components/header';
 import { TaskList } from '@/components/task-list';
 import { ScheduleGrid } from '@/components/schedule-grid';
 import { ProductionConditionsPanel } from '@/components/production-conditions-panel';
+import { PressWorkloadPanel } from '@/components/press-workload-panel';
 import { ValidationDialog } from '@/components/validation-dialog';
 import { initialShifts, initialProductionConditions, initialTasks } from '@/lib/mock-data';
 import type { Task, Shift, Schedule, ProductionCondition, ScheduledTask, ValidationRequest } from '@/types';
@@ -19,6 +20,9 @@ export default function Home() {
   const [validationRequest, setValidationRequest] = useState<ValidationRequest | null>(null);
   const [isLoadingTasks, setIsLoadingTasks] = useState(false);
   const [isLoadingConditions, setIsLoadingConditions] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveUrl, setSaveUrl] = useState('');
+  const [selectedPress, setSelectedPress] = useState<number | null>(null);
   const { toast } = useToast();
 
   const handleLoadTasks = async (url: string) => {
@@ -33,18 +37,15 @@ export default function Home() {
 
     setIsLoadingTasks(true);
     try {
-      // Use the Next.js API route as a proxy to avoid CORS issues
       const proxyUrl = `/api/tasks?url=${encodeURIComponent(url)}`;
       const response = await fetch(proxyUrl);
-      const data = await response.json(); // Always expect JSON now from our proxy
+      const data = await response.json();
 
       if (!response.ok) {
-        // Use the detailed error message from our proxy if available
         const errorMessage = data.details || data.error || `Request failed with status: ${response.status}`;
         throw new Error(errorMessage);
       }
       
-      // Handle cases where the script returns an error object in a 200 OK response
       if (data.error) {
         throw new Error(`Error from Google Script: ${data.error}`);
       }
@@ -133,6 +134,45 @@ export default function Home() {
     }
   };
 
+  const handleSaveSchedule = async () => {
+    const scheduledItems = Object.values(schedule).flat();
+    if (scheduledItems.length === 0) {
+      toast({ title: "Nothing to Save", description: "The schedule is empty." });
+      return;
+    }
+    if (!saveUrl) {
+      toast({ title: "URL Required", description: "Please provide the 'Molding Sheet' save URL in the tasks panel.", variant: "destructive" });
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const response = await fetch('/api/schedule', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sheetUrl: saveUrl, schedule }),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || result.details || 'Failed to save schedule.');
+      }
+      toast({
+        title: "Schedule Saved",
+        description: `Successfully saved ${result.count || scheduledItems.length} items to your sheet.`,
+      });
+    } catch (error) {
+      console.error("Failed to save schedule:", error);
+      const description = error instanceof Error ? error.message : "An unknown error occurred.";
+      toast({
+        title: "Error Saving Schedule",
+        description: description,
+        variant: "destructive",
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>, taskId: string) => {
     e.dataTransfer.setData('text/plain', taskId);
   };
@@ -148,13 +188,28 @@ export default function Home() {
     }
   };
 
+  const handlePressSelect = (pressNo: number | null) => {
+    setSelectedPress(pressNo);
+  };
+
+  const filteredTasks = React.useMemo(() => {
+    if (selectedPress === null) {
+      return tasks;
+    }
+    const validItemCodesForPress = new Set(
+      productionConditions
+        .filter(pc => pc.pressNo === selectedPress)
+        .map(pc => pc.itemCode)
+    );
+    return tasks.filter(task => validItemCodesForPress.has(task.itemCode));
+  }, [tasks, selectedPress, productionConditions]);
+
+
   const handleValidationSuccess = (
-    scheduledTaskDetails: Omit<ScheduledTask, 'id'>,
+    scheduledTaskDetails: Omit<ScheduledTask, 'id' | 'shiftId'>,
     task: Task,
     shift: Shift
   ) => {
-    // Generate the unique ID for the new scheduled task.
-    // This can safely read the current 'schedule' state.
     const batchCount = Object.values(schedule)
       .flat()
       .filter(st => st.jobCardNumber === task.jobCardNumber).length;
@@ -165,9 +220,9 @@ export default function Home() {
     const scheduledTask: ScheduledTask = {
       ...scheduledTaskDetails,
       id: newId,
+      shiftId: shift.id,
     };
 
-    // Update the schedule state
     setSchedule((currentSchedule) => {
       const newSchedule = { ...currentSchedule };
       const newShiftTasks = [...(newSchedule[shift.id] || []), scheduledTask];
@@ -175,7 +230,6 @@ export default function Home() {
       return newSchedule;
     });
 
-    // Update tasks state
     setTasks((prevTasks) =>
       prevTasks
         .map((t) =>
@@ -186,7 +240,6 @@ export default function Home() {
         .filter((t) => t.remainingQuantity > 0)
     );
 
-    // Update shifts state
     setShifts((prevShifts) =>
       prevShifts.map((s) =>
         s.id === shift.id
@@ -200,14 +253,23 @@ export default function Home() {
 
   return (
     <div className="flex flex-col h-screen bg-background text-foreground">
-      <Header />
+      <Header onSave={handleSaveSchedule} isSaving={isSaving} />
       <main className="flex-1 flex flex-col lg:flex-row gap-6 p-4 lg:p-6 overflow-hidden">
         <div className="lg:w-1/3 flex flex-col gap-6 overflow-y-auto pr-2">
-          <TaskList
+           <PressWorkloadPanel
             tasks={tasks}
+            schedule={schedule}
+            productionConditions={productionConditions}
+            onPressSelect={handlePressSelect}
+            selectedPress={selectedPress}
+          />
+          <TaskList
+            tasks={filteredTasks}
             onDragStart={handleDragStart}
             onLoadTasks={handleLoadTasks}
             isLoading={isLoadingTasks}
+            saveUrl={saveUrl}
+            onSaveUrlChange={setSaveUrl}
           />
           <ProductionConditionsPanel
             productionConditions={productionConditions}
