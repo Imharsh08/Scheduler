@@ -1,18 +1,32 @@
 
 import React, { useState, useEffect } from 'react';
-import type { Task } from '@/types';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { GripVertical, Package, Clock, CalendarDays } from 'lucide-react';
+import type { Task, Shift } from '@/types';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import { GripVertical, Package, Clock, CalendarDays, CalendarPlus } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { formatDistanceToNow, format } from 'date-fns';
+import { Button } from '@/components/ui/button';
+import { 
+    DropdownMenu, 
+    DropdownMenuContent, 
+    DropdownMenuItem, 
+    DropdownMenuPortal, 
+    DropdownMenuSub, 
+    DropdownMenuSubContent, 
+    DropdownMenuSubTrigger, 
+    DropdownMenuTrigger 
+} from '@/components/ui/dropdown-menu';
 
 interface TaskCardProps {
   task: Task;
   onDragStart: (e: React.DragEvent<HTMLDivElement>, taskId: string) => void;
+  onScheduleClick: (task: Task, shiftId: string) => void;
+  shifts: Shift[];
+  isSchedulingDisabled: boolean;
 }
 
-export const TaskCard: React.FC<TaskCardProps> = ({ task, onDragStart }) => {
+export const TaskCard: React.FC<TaskCardProps> = ({ task, onDragStart, onScheduleClick, shifts, isSchedulingDisabled }) => {
   const [waitingTime, setWaitingTime] = useState('');
 
   useEffect(() => {
@@ -20,6 +34,8 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onDragStart }) => {
       setWaitingTime(formatDistanceToNow(new Date(task.creationDate), { addSuffix: true }));
     }
   }, [task.creationDate]);
+
+  const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
   return (
     <div
@@ -75,6 +91,43 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onDragStart }) => {
             )}
           </div>
         </CardContent>
+        <CardFooter className="p-4 pt-0 flex justify-end">
+            <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm" disabled={isSchedulingDisabled}>
+                        <CalendarPlus className="mr-2 h-4 w-4" />
+                        Schedule
+                    </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuPortal>
+                    <DropdownMenuContent align="end">
+                        {daysOfWeek.map(day => (
+                            <DropdownMenuSub key={day}>
+                                <DropdownMenuSubTrigger>{day}</DropdownMenuSubTrigger>
+                                <DropdownMenuPortal>
+                                    <DropdownMenuSubContent>
+                                        {shifts.filter(s => s.day === day).map(shift => (
+                                            <DropdownMenuItem 
+                                                key={shift.id} 
+                                                onSelect={() => onScheduleClick(task, shift.id)} 
+                                                disabled={shift.remainingCapacity <= 0}
+                                                className="flex justify-between gap-4"
+                                            >
+                                                <span>{shift.type}</span>
+                                                <span className="text-xs text-muted-foreground">
+                                                    {Math.floor(shift.remainingCapacity / 60)}h {shift.remainingCapacity % 60}m left
+                                                </span>
+                                            </DropdownMenuItem>
+                                        ))}
+                                        {shifts.filter(s => s.day === day).length === 0 && <DropdownMenuItem disabled>No shifts available</DropdownMenuItem>}
+                                    </DropdownMenuSubContent>
+                                </DropdownMenuPortal>
+                            </DropdownMenuSub>
+                        ))}
+                    </DropdownMenuContent>
+                </DropdownMenuPortal>
+            </DropdownMenu>
+        </CardFooter>
       </Card>
     </div>
   );

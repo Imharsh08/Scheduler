@@ -1,6 +1,6 @@
 
 import React from 'react';
-import type { Task } from '@/types';
+import type { Task, Shift } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { TaskCard } from './task-card';
 import { ListTodo, Download, Loader2 } from 'lucide-react';
@@ -11,9 +11,12 @@ interface TaskListProps {
   onDragStart: (e: React.DragEvent<HTMLDivElement>, taskId: string) => void;
   onLoadTasks: () => void;
   isLoading: boolean;
+  onScheduleClick: (task: Task, shiftId: string) => void;
+  shifts: Shift[];
+  isSchedulingDisabled: boolean;
 }
 
-export const TaskList: React.FC<TaskListProps> = ({ tasks, onDragStart, onLoadTasks, isLoading }) => {
+export const TaskList: React.FC<TaskListProps> = ({ tasks, onDragStart, onLoadTasks, isLoading, onScheduleClick, shifts, isSchedulingDisabled }) => {
   const sortedTasks = React.useMemo(() => {
     const priorityOrder: Record<Task['priority'], number> = {
       'High': 1,
@@ -65,7 +68,14 @@ export const TaskList: React.FC<TaskListProps> = ({ tasks, onDragStart, onLoadTa
              </div>
           ) : sortedTasks.length > 0 ? (
             sortedTasks.map((task) => (
-              <TaskCard key={task.jobCardNumber} task={task} onDragStart={onDragStart} />
+              <TaskCard 
+                key={task.jobCardNumber} 
+                task={task} 
+                onDragStart={onDragStart}
+                onScheduleClick={onScheduleClick}
+                shifts={shifts}
+                isSchedulingDisabled={isSchedulingDisabled}
+              />
             ))
           ) : (
             <p className="text-muted-foreground text-center py-4">No tasks loaded or matching filter.</p>

@@ -60,21 +60,19 @@ export default function Home() {
     if (productionConditions.length > 0) {
       const pressNos = [...new Set(productionConditions.map(pc => pc.pressNo))];
       
-      setShiftsByPress(prev => {
-        const newShiftsByPress: Record<number, Shift[]> = {};
-        pressNos.forEach(pressNo => {
-          newShiftsByPress[pressNo] = prev[pressNo] || JSON.parse(JSON.stringify(initialShifts));
-        });
-        return newShiftsByPress;
+      const newShiftsByPress: Record<number, Shift[]> = {};
+      pressNos.forEach(pressNo => {
+        // Ensure each press gets a deep copy of the initial shifts
+        newShiftsByPress[pressNo] = JSON.parse(JSON.stringify(initialShifts));
       });
+      setShiftsByPress(newShiftsByPress);
 
-      setScheduleByPress(prev => {
-        const newScheduleByPress: Record<number, Schedule> = {};
+      const newScheduleByPress: Record<number, Schedule> = {};
         pressNos.forEach(pressNo => {
-          newScheduleByPress[pressNo] = prev[pressNo] || {};
+          newScheduleByPress[pressNo] = {};
         });
-        return newScheduleByPress;
-      });
+      setScheduleByPress(newScheduleByPress);
+
     }
   }, [productionConditions]);
 
@@ -380,6 +378,30 @@ export default function Home() {
     setSelectedPress(pressNo);
   };
 
+  const handleScheduleClick = (task: Task, shiftId: string) => {
+    if (selectedPress === null) {
+        toast({
+            title: "Select a Press First",
+            description: "Please select a press from the workload panel to schedule a task.",
+            variant: "destructive"
+        });
+        return;
+    }
+
+    const pressShifts = shiftsByPress[selectedPress] || [];
+    const shift = pressShifts.find((s) => s.id === shiftId);
+
+    if (shift) {
+         setValidationRequest({ task, shift, pressNo: selectedPress });
+    } else {
+         toast({
+            title: "Shift Not Found",
+            description: "The selected shift could not be found for the current press.",
+            variant: "destructive"
+        });
+    }
+  };
+
   const filteredTasks = React.useMemo(() => {
     if (selectedPress === null) {
       return tasks;
@@ -399,45 +421,39 @@ export default function Home() {
     const { task, pressNo: pressToUpdate } = validationRequest;
 
     let totalQuantityScheduled = 0;
-    const shiftCapacityUpdates = new Map<string, number>();
-    const newScheduledTasksWithIds: ScheduledTask[] = [];
-
+    
     setScheduleByPress(current => {
-      const pressSchedule = current[pressToUpdate] || {};
+      const pressSchedule = { ...(current[pressToUpdate] || {}) };
       let currentBatchCount = Object.values(pressSchedule)
           .flat()
           .filter(st => st.jobCardNumber === task.jobCardNumber).length;
       
+      const newScheduledTasksWithIds: ScheduledTask[] = [];
       scheduledItems.forEach(item => {
         totalQuantityScheduled += item.scheduledQuantity;
-        const timeUpdate = shiftCapacityUpdates.get(item.shiftId) || 0;
-        shiftCapacityUpdates.set(item.shiftId, timeUpdate + item.timeTaken);
-        
         const batchSuffix = String.fromCharCode('A'.charCodeAt(0) + currentBatchCount);
         const newId = `${item.jobCardNumber}-${batchSuffix}`;
         currentBatchCount++;
         newScheduledTasksWithIds.push({ ...item, id: newId });
       });
 
-      const newPressSchedule = { ...pressSchedule };
       newScheduledTasksWithIds.forEach(scheduledTask => {
-        const currentShiftTasks = newPressSchedule[scheduledTask.shiftId] || [];
-        newPressSchedule[scheduledTask.shiftId] = [...currentShiftTasks, scheduledTask];
+        const currentShiftTasks = pressSchedule[scheduledTask.shiftId] || [];
+        pressSchedule[scheduledTask.shiftId] = [...currentShiftTasks, scheduledTask];
       });
 
-      return { ...current, [pressToUpdate]: newPressSchedule };
+      return { ...current, [pressToUpdate]: pressSchedule };
     });
 
     setShiftsByPress(current => {
-      const pressShifts = current[pressToUpdate] || [];
-      const updatedPressShifts = pressShifts.map(s => {
-        const timeToDecrement = shiftCapacityUpdates.get(s.id);
-        if (timeToDecrement) {
-          return { ...s, remainingCapacity: s.remainingCapacity - timeToDecrement };
+      const pressShifts = JSON.parse(JSON.stringify(current[pressToUpdate] || []));
+      scheduledItems.forEach(item => {
+        const shiftToUpdate = pressShifts.find((s: Shift) => s.id === item.shiftId);
+        if (shiftToUpdate) {
+            shiftToUpdate.remainingCapacity -= item.timeTaken;
         }
-        return s;
       });
-      return { ...current, [pressToUpdate]: updatedPressShifts };
+      return { ...current, [pressToUpdate]: pressShifts };
     });
 
     setTasks((prevTasks) =>
@@ -488,6 +504,9 @@ export default function Home() {
                 onDragStart={handleDragStart}
                 onLoadTasks={handleLoadTasks}
                 isLoading={isLoadingTasks}
+                onScheduleClick={handleScheduleClick}
+                shifts={selectedPress !== null ? shiftsByPress[selectedPress] || [] : []}
+                isSchedulingDisabled={selectedPress === null}
               />
             </div>
             <div className="lg:w-2/3 flex-1 overflow-x-auto">
