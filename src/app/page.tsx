@@ -56,9 +56,25 @@ export default function Home() {
       const proxyUrl = `/api/tasks?url=${encodeURIComponent(configUrl)}`;
       const response = await fetch(proxyUrl);
       const data = await response.json();
+
+      if (!response.ok) {
+        const errorMessage = data.details || data.error || 'Failed to fetch configuration.';
+        throw new Error(errorMessage);
+      }
       
-      if (!response.ok) throw new Error(data.details || data.error || 'Failed to fetch configuration.');
-      if (data.error) throw new Error(data.error);
+      if (data.error) {
+        console.error("Configuration error from Google Sheet:", data.error);
+        let userFriendlyDescription = data.error;
+        if (typeof userFriendlyDescription === 'string' && (userFriendlyDescription.includes("' not found") || userFriendlyDescription.includes("Missing 'Key' or 'Value' headers"))) {
+            userFriendlyDescription = `There's a problem with your "Web Url" configuration sheet. Please ensure it exists and has "Key" and "Value" columns as described in the setup instructions.`;
+        }
+         toast({
+            title: "Configuration Error",
+            description: userFriendlyDescription,
+            variant: "destructive",
+        });
+        return null;
+      }
       
       const newUrls: IntegrationUrls = {
         config: configUrl,
@@ -76,7 +92,7 @@ export default function Home() {
       return newUrls;
 
     } catch (error) {
-       console.error("Failed to load URLs from sheet:", error);
+      console.error("Failed to load URLs from sheet:", error);
       const description = error instanceof Error ? error.message : "Could not fetch configuration. Check the URL and try again.";
       toast({
         title: "Error Loading Configuration",
