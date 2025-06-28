@@ -560,43 +560,69 @@ export default function Home() {
   }
 
   const handleUpdateScheduledTask = (updatedDetails: Partial<ScheduledTask>) => {
-      if(!taskToEdit) return;
+    if (!taskToEdit) return;
 
-      const { pressNo, shiftId, scheduledQuantity: oldQty, timeTaken: oldTime } = taskToEdit;
-      const { scheduledQuantity: newQty, timeTaken: newTime, endTime: newEndTime } = updatedDetails;
+    const { pressNo, shiftId, scheduledQuantity: oldQty, timeTaken: oldTime } = taskToEdit;
+    const { scheduledQuantity: newQty, timeTaken: newTime, endTime: newEndTime } = updatedDetails;
 
-      if(newQty === undefined || newTime === undefined || newEndTime === undefined) return;
+    if (newQty === undefined || newTime === undefined || newEndTime === undefined) return;
 
-      const qtyDifference = newQty - oldQty;
-      const timeDifference = newTime - oldTime;
-      
-      setTasks(currentTasks => currentTasks.map(t => 
-          t.jobCardNumber === taskToEdit.jobCardNumber
-          ? { ...t, remainingQuantity: t.remainingQuantity - qtyDifference }
-          : t
-      ).filter(t => t.remainingQuantity > 0));
+    const qtyDifference = newQty - oldQty;
+    const timeDifference = newTime - oldTime;
 
-      setShiftsByPress(current => {
-          const pressShifts = JSON.parse(JSON.stringify(current[pressNo] || []));
-          const shiftToUpdate = pressShifts.find((s: Shift) => s.id === shiftId);
-          if (shiftToUpdate) {
-              shiftToUpdate.remainingCapacity -= timeDifference;
-          }
-          return { ...current, [pressNo]: pressShifts };
-      });
+    setTasks(currentTasks => {
+        const jobCardNumber = taskToEdit.jobCardNumber;
+        const existingTaskIndex = currentTasks.findIndex(t => t.jobCardNumber === jobCardNumber);
 
-      setScheduleByPress(current => {
-          const pressSchedule = { ...(current[pressNo] || {}) };
-          const shiftTasks = (pressSchedule[shiftId] || []).map(t => 
-              t.id === taskToEdit.id ? { ...t, ...updatedDetails } : t
-          );
-          pressSchedule[shiftId] = shiftTasks;
-          return { ...current, [pressNo]: pressSchedule };
-      });
+        if (existingTaskIndex > -1) {
+            // Task already exists in the unscheduled list, just update its quantity
+            const updatedTasks = [...currentTasks];
+            updatedTasks[existingTaskIndex].remainingQuantity -= qtyDifference;
+            return updatedTasks.filter(t => t.remainingQuantity > 0);
+        } else {
+            // Task was fully scheduled and is not in the list.
+            // We need to add it back if the quantity was reduced.
+            const returnedQuantity = -qtyDifference;
+            if (returnedQuantity > 0) {
+                const { itemCode, material, priority, creationDate, deliveryDate, orderedQuantity } = taskToEdit;
+                const newTask: Task = {
+                    jobCardNumber,
+                    itemCode,
+                    material,
+                    priority,
+                    orderedQuantity,
+                    remainingQuantity: returnedQuantity,
+                    creationDate,
+                    deliveryDate,
+                };
+                return [...currentTasks, newTask];
+            }
+            return currentTasks;
+        }
+    });
 
-      toast({ title: "Task Updated", description: `Task ${taskToEdit.jobCardNumber} quantity has been adjusted.` });
-      setTaskToEdit(null);
+    setShiftsByPress(current => {
+        const pressShifts = JSON.parse(JSON.stringify(current[pressNo] || []));
+        const shiftToUpdate = pressShifts.find((s: Shift) => s.id === shiftId);
+        if (shiftToUpdate) {
+            shiftToUpdate.remainingCapacity -= timeDifference;
+        }
+        return { ...current, [pressNo]: pressShifts };
+    });
+
+    setScheduleByPress(current => {
+        const pressSchedule = { ...(current[pressNo] || {}) };
+        const shiftTasks = (pressSchedule[shiftId] || []).map(t =>
+            t.id === taskToEdit.id ? { ...t, ...updatedDetails } : t
+        );
+        pressSchedule[shiftId] = shiftTasks;
+        return { ...current, [pressNo]: pressSchedule };
+    });
+
+    toast({ title: "Task Updated", description: `Task ${taskToEdit.jobCardNumber} quantity has been adjusted.` });
+    setTaskToEdit(null);
   };
+
 
   return (
     <div className="flex flex-col h-screen bg-background text-foreground">
