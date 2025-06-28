@@ -55,6 +55,10 @@ export const ColorSettingsDialog: React.FC<ColorSettingsDialogProps> = ({
     onSave(localColors);
     onOpenChange(false);
   };
+  
+  const usedColors = React.useMemo(() => {
+      return new Set(Object.values(localColors));
+  }, [localColors]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -72,21 +76,28 @@ export const ColorSettingsDialog: React.FC<ColorSettingsDialogProps> = ({
                 <div key={dieNo} className="space-y-2">
                   <Label>Die {dieNo}</Label>
                   <div className="grid grid-cols-7 gap-2">
-                    {COLOR_PALETTE.map(colorClass => (
-                      <button
-                        key={colorClass}
-                        type="button"
-                        onClick={() => handleColorSelect(dieNo, colorClass)}
-                        className={cn(
-                          'h-8 w-8 rounded-md border-2 transition-all',
-                          colorClass,
-                          localColors[dieNo] === colorClass
-                            ? 'ring-2 ring-offset-2 ring-ring'
-                            : 'hover:opacity-80'
-                        )}
-                        aria-label={`Select color for Die ${dieNo}`}
-                      />
-                    ))}
+                    {COLOR_PALETTE.map(colorClass => {
+                      const currentColorForThisDie = localColors[dieNo];
+                      const isUsedByAnotherDie = usedColors.has(colorClass) && currentColorForThisDie !== colorClass;
+                      
+                      return (
+                        <button
+                          key={colorClass}
+                          type="button"
+                          onClick={() => handleColorSelect(dieNo, colorClass)}
+                          disabled={isUsedByAnotherDie}
+                          className={cn(
+                            'h-8 w-8 rounded-md border-2 transition-all',
+                            colorClass,
+                            localColors[dieNo] === colorClass
+                              ? 'ring-2 ring-offset-2 ring-ring'
+                              : 'hover:opacity-80',
+                            isUsedByAnotherDie && 'opacity-25 cursor-not-allowed'
+                          )}
+                          aria-label={`Select color for Die ${dieNo}`}
+                        />
+                      );
+                    })}
                   </div>
                 </div>
               ))
