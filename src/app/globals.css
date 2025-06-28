@@ -2,6 +2,23 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer components {
+  .color-swatch-sky { @apply bg-sky-200 border-sky-400; }
+  .color-swatch-emerald { @apply bg-emerald-200 border-emerald-400; }
+  .color-swatch-amber { @apply bg-amber-200 border-amber-400; }
+  .color-swatch-rose { @apply bg-rose-200 border-rose-400; }
+  .color-swatch-violet { @apply bg-violet-200 border-violet-400; }
+  .color-swatch-lime { @apply bg-lime-200 border-lime-400; }
+  .color-swatch-cyan { @apply bg-cyan-200 border-cyan-400; }
+  .color-swatch-fuchsia { @apply bg-fuchsia-200 border-fuchsia-400; }
+  .color-swatch-orange { @apply bg-orange-200 border-orange-400; }
+  .color-swatch-teal { @apply bg-teal-200 border-teal-400; }
+  .color-swatch-indigo { @apply bg-indigo-200 border-indigo-400; }
+  .color-swatch-yellow { @apply bg-yellow-200 border-yellow-400; }
+  .color-swatch-pink { @apply bg-pink-200 border-pink-400; }
+  .color-swatch-slate { @apply bg-slate-200 border-slate-400; }
+}
+
 body {
   font-family: Arial, Helvetica, sans-serif;
 }
