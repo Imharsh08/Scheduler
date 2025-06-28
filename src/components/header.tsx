@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Factory, Save, Loader2, Settings, Menu, Palette, RefreshCw, Settings2, GanttChartSquare, Download } from 'lucide-react';
+import { Factory, Save, Loader2, Settings, Menu, Palette, RefreshCw, Settings2, GanttChartSquare, Download, LayoutGrid, BarChart2, Check, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -24,6 +24,8 @@ interface HeaderProps {
   onViewAllTasksClick: () => void;
   onDownloadPdfClick: (pressNo: 'all' | number) => void;
   pressNumbers: number[];
+  viewMode: 'grid' | 'gantt';
+  onSetViewMode: (mode: 'grid' | 'gantt') => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({ 
@@ -36,6 +38,8 @@ export const Header: React.FC<HeaderProps> = ({
     onViewAllTasksClick,
     onDownloadPdfClick,
     pressNumbers,
+    viewMode,
+    onSetViewMode
 }) => {
   return (
     <header className="flex items-center justify-between p-4 border-b bg-card shadow-sm">
@@ -94,6 +98,27 @@ export const Header: React.FC<HeaderProps> = ({
               <Settings2 className="mr-2 h-4 w-4" />
               <span>Production Conditions</span>
             </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuSub>
+                <DropdownMenuSubTrigger>
+                    <Eye className="mr-2 h-4 w-4" />
+                    <span>View Mode</span>
+                </DropdownMenuSubTrigger>
+                <DropdownMenuPortal>
+                    <DropdownMenuSubContent>
+                        <DropdownMenuItem onClick={() => onSetViewMode('grid')}>
+                            <LayoutGrid className="mr-2 h-4 w-4" />
+                            Grid View
+                            {viewMode === 'grid' && <Check className="ml-auto h-4 w-4" />}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => onSetViewMode('gantt')}>
+                            <BarChart2 className="mr-2 h-4 w-4" />
+                            Gantt Chart
+                            {viewMode === 'gantt' && <Check className="ml-auto h-4 w-4" />}
+                        </DropdownMenuItem>
+                    </DropdownMenuSubContent>
+                </DropdownMenuPortal>
+            </DropdownMenuSub>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={onOpenIntegrationDialog}>
               <Settings className="mr-2 h-4 w-4" />

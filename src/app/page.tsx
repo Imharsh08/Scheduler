@@ -18,6 +18,7 @@ import { generateSchedulePdf } from '@/lib/pdf-utils';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { EditScheduledTaskDialog } from '@/components/edit-scheduled-task-dialog';
 import { generateIdealSchedule } from '@/lib/scheduler';
+import { GanttChartView } from '@/components/gantt-chart-view';
 
 export default function Home() {
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
@@ -47,6 +48,7 @@ export default function Home() {
   const [taskToRemove, setTaskToRemove] = useState<ScheduledTask | null>(null);
   const [taskToEdit, setTaskToEdit] = useState<ScheduledTask | null>(null);
   const [generatingPressNo, setGeneratingPressNo] = useState<number | null>(null);
+  const [viewMode, setViewMode] = useState<'grid' | 'gantt'>('grid');
 
   useEffect(() => {
     try {
@@ -60,6 +62,11 @@ export default function Home() {
       const savedColors = localStorage.getItem('dieColors');
       if (savedColors) {
         setDieColors(JSON.parse(savedColors));
+      }
+
+      const savedViewMode = localStorage.getItem('viewMode') as 'grid' | 'gantt' | null;
+      if (savedViewMode) {
+          setViewMode(savedViewMode);
       }
     } catch (error) {
       console.error("Failed to load data from localStorage", error);
@@ -86,6 +93,19 @@ export default function Home() {
     }
   }, [productionConditions]);
 
+  const handleSetViewMode = (mode: 'grid' | 'gantt') => {
+    setViewMode(mode);
+    try {
+        localStorage.setItem('viewMode', mode);
+    } catch (error) {
+        console.error("Failed to save view mode to localStorage", error);
+        toast({
+            title: "Could not save view setting",
+            description: "Your browser may be preventing saving to local storage.",
+            variant: "destructive"
+        })
+    }
+  };
 
   const handleLoadTasks = async (taskUrl?: string) => {
     const urlToUse = taskUrl || urls.tasks;
@@ -442,7 +462,7 @@ export default function Home() {
       scheduledItems.forEach(item => {
         totalQuantityScheduled += item.scheduledQuantity;
         const batchSuffix = String.fromCharCode('A'.charCodeAt(0) + currentBatchCount);
-        const newId = `${item.jobCardNumber}-${batchSuffix}`;
+        const newId = `${item.jobCardNumber}-${item.pressNo}-${batchSuffix}`;
         currentBatchCount++;
         newScheduledTasksWithIds.push({ ...item, id: newId });
       });
@@ -667,8 +687,16 @@ export default function Home() {
             shifts: freshShiftsForPress,
             pressNo,
         });
+        
+        const otherPressSchedules: Record<number, Schedule> = {};
+        Object.keys(scheduleByPress).forEach(pNoStr => {
+            const pNo = parseInt(pNoStr, 10);
+            if(pNo !== pressNo) {
+                otherPressSchedules[pNo] = scheduleByPress[pNo];
+            }
+        });
 
-        setScheduleByPress(current => ({ ...current, [pressNo]: newSchedule }));
+        setScheduleByPress({ ...otherPressSchedules, [pressNo]: newSchedule });
         setShiftsByPress(current => ({ ...current, [pressNo]: newShifts }));
         setTasks(remainingTasks);
         
@@ -702,6 +730,8 @@ export default function Home() {
         onViewAllTasksClick={() => setIsAllTasksDialogOpen(true)}
         onDownloadPdfClick={handleDownloadPdf}
         pressNumbers={pressNumbers}
+        viewMode={viewMode}
+        onSetViewMode={handleSetViewMode}
       />
       <main className="flex-1 flex flex-col gap-4 p-4 lg:p-6 overflow-hidden">
         <PressWorkloadPanel
@@ -729,15 +759,24 @@ export default function Home() {
               />
             </div>
             <div className="lg:w-2/3 flex-1 overflow-x-auto">
-              <ScheduleGrid
-                shifts={selectedPress !== null ? shiftsByPress[selectedPress] || [] : []}
-                schedule={selectedPress !== null ? scheduleByPress[selectedPress] || {} : {}}
-                onDrop={handleDrop}
-                dieColors={dieColors}
-                selectedPress={selectedPress}
-                onRemoveRequest={handleRemoveRequest}
-                onEditRequest={handleEditRequest}
-              />
+              {viewMode === 'grid' ? (
+                <ScheduleGrid
+                  shifts={selectedPress !== null ? shiftsByPress[selectedPress] || [] : []}
+                  schedule={selectedPress !== null ? scheduleByPress[selectedPress] || {} : {}}
+                  onDrop={handleDrop}
+                  dieColors={dieColors}
+                  selectedPress={selectedPress}
+                  onRemoveRequest={handleRemoveRequest}
+                  onEditRequest={handleEditRequest}
+                />
+              ) : (
+                <GanttChartView
+                  scheduleByPress={scheduleByPress}
+                  shiftsByPress={shiftsByPress}
+                  dieColors={dieColors}
+                  selectedPress={selectedPress}
+                />
+              )}
             </div>
         </div>
       </main>
