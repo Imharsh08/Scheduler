@@ -1,4 +1,6 @@
 
+'use client';
+
 import React, { useState, useEffect } from 'react';
 import type { Task, Shift } from '@/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -56,6 +58,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onDragStart, onSchedul
                 </div>
             </div>
             <div className="flex items-center gap-2">
+              <Badge variant="secondary">{task.material}</Badge>
               {task.priority !== 'None' && (
                 <Badge 
                     variant={
@@ -69,12 +72,9 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onDragStart, onSchedul
               <GripVertical className="text-muted-foreground w-5 h-5" />
             </div>
         </CardHeader>
-        <CardContent className="px-3 pt-0 pb-2">
-          <div className="flex justify-between items-center mb-1">
-            <div>
-              <p className="text-sm font-medium">Quantity: <span className="font-bold">{task.remainingQuantity}</span></p>
-            </div>
-            <Badge variant="secondary">{task.material}</Badge>
+        <CardContent className="p-3 pt-0 pb-1">
+          <div>
+            <p className="text-sm font-medium">Quantity: <span className="font-bold">{task.remainingQuantity}</span></p>
           </div>
           <div className="flex flex-col gap-1 text-xs text-muted-foreground mt-1">
             {task.deliveryDate && (
