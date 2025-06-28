@@ -628,6 +628,9 @@ export default function Home() {
                 onScheduleClick={handleScheduleClick}
                 shifts={selectedPress !== null ? shiftsByPress[selectedPress] || [] : []}
                 isSchedulingDisabled={selectedPress === null}
+                productionConditions={productionConditions}
+                dieColors={dieColors}
+                selectedPress={selectedPress}
               />
             </div>
             <div className="lg:w-2/3 flex-1 overflow-x-auto">

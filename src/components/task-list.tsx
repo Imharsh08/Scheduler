@@ -1,6 +1,6 @@
 
 import React from 'react';
-import type { Task, Shift } from '@/types';
+import type { Task, Shift, ProductionCondition } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { TaskCard } from './task-card';
 import { ListTodo, Download, Loader2 } from 'lucide-react';
@@ -14,9 +14,23 @@ interface TaskListProps {
   onScheduleClick: (task: Task, shiftId: string) => void;
   shifts: Shift[];
   isSchedulingDisabled: boolean;
+  productionConditions: ProductionCondition[];
+  dieColors: Record<number, string>;
+  selectedPress: number | null;
 }
 
-export const TaskList: React.FC<TaskListProps> = ({ tasks, onDragStart, onLoadTasks, isLoading, onScheduleClick, shifts, isSchedulingDisabled }) => {
+export const TaskList: React.FC<TaskListProps> = ({ 
+  tasks, 
+  onDragStart, 
+  onLoadTasks, 
+  isLoading, 
+  onScheduleClick, 
+  shifts, 
+  isSchedulingDisabled,
+  productionConditions,
+  dieColors,
+  selectedPress 
+}) => {
   const sortedTasks = React.useMemo(() => {
     const priorityOrder: Record<Task['priority'], number> = {
       'High': 1,
@@ -60,7 +74,7 @@ export const TaskList: React.FC<TaskListProps> = ({ tasks, onDragStart, onLoadTa
             </Button>
         </div>
       </CardHeader>
-      <CardContent className="flex-1 overflow-y-auto">
+      <CardContent className="flex-1 overflow-y-auto p-4">
         <div className="space-y-4">
           {isLoading && tasks.length === 0 ? (
              <div className="flex justify-center items-center h-full">
@@ -75,6 +89,9 @@ export const TaskList: React.FC<TaskListProps> = ({ tasks, onDragStart, onLoadTa
                 onScheduleClick={onScheduleClick}
                 shifts={shifts}
                 isSchedulingDisabled={isSchedulingDisabled}
+                productionConditions={productionConditions}
+                dieColors={dieColors}
+                selectedPress={selectedPress}
               />
             ))
           ) : (

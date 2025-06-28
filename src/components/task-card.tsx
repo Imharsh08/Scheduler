@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import type { Task, Shift } from '@/types';
+import type { Task, Shift, ProductionCondition } from '@/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { GripVertical, Package, Clock, CalendarDays, CalendarPlus } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -19,6 +19,7 @@ import {
     DropdownMenuSubTrigger, 
     DropdownMenuTrigger 
 } from '@/components/ui/dropdown-menu';
+import { getDieColorClass } from '@/lib/color-utils';
 
 interface TaskCardProps {
   task: Task;
@@ -26,9 +27,21 @@ interface TaskCardProps {
   onScheduleClick: (task: Task, shiftId: string) => void;
   shifts: Shift[];
   isSchedulingDisabled: boolean;
+  productionConditions: ProductionCondition[];
+  dieColors: Record<number, string>;
+  selectedPress: number | null;
 }
 
-export const TaskCard: React.FC<TaskCardProps> = ({ task, onDragStart, onScheduleClick, shifts, isSchedulingDisabled }) => {
+export const TaskCard: React.FC<TaskCardProps> = ({ 
+  task, 
+  onDragStart, 
+  onScheduleClick, 
+  shifts, 
+  isSchedulingDisabled,
+  productionConditions,
+  dieColors,
+  selectedPress
+}) => {
   const [waitingTime, setWaitingTime] = useState('');
 
   useEffect(() => {
@@ -38,6 +51,16 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onDragStart, onSchedul
   }, [task.creationDate]);
 
   const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+  const availableDies = React.useMemo(() => {
+    let conditions = productionConditions.filter(
+      pc => pc.itemCode === task.itemCode && pc.material === task.material
+    );
+    if (selectedPress !== null) {
+      conditions = conditions.filter(pc => pc.pressNo === selectedPress);
+    }
+    return [...new Set(conditions.map(pc => pc.dieNo))].sort((a,b) => a - b);
+  }, [task, productionConditions, selectedPress]);
 
   return (
     <div
@@ -72,11 +95,27 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onDragStart, onSchedul
               <GripVertical className="text-muted-foreground w-5 h-5" />
             </div>
         </CardHeader>
-        <CardContent className="p-3 pt-1">
+        <CardContent className="p-3 pt-1 space-y-2">
           <div>
             <p className="text-sm font-medium">Quantity: <span className="font-bold">{task.remainingQuantity}</span></p>
           </div>
-          <div className="flex items-end justify-between mt-1">
+
+          {availableDies.length > 0 && (
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-medium text-muted-foreground">Available Dies:</span>
+                <div className="flex gap-1 flex-wrap">
+                  {availableDies.map(dieNo => (
+                    <Badge key={dieNo} variant="outline" className={cn('font-bold', getDieColorClass(dieNo, dieColors))}>
+                      {dieNo}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="flex items-end justify-between">
             <div className="flex flex-col gap-1 text-xs text-muted-foreground">
               {task.deliveryDate && (
                   <div className="flex items-center gap-2">
