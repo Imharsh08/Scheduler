@@ -434,9 +434,9 @@ export default function Home() {
     
     setScheduleByPress(current => {
       const pressSchedule = { ...(current[pressToUpdate] || {}) };
-      let currentBatchCount = Object.values(pressSchedule)
-          .flat()
-          .filter(st => st.jobCardNumber === task.jobCardNumber).length;
+      
+      const allScheduledTasks = Object.values(current).flatMap(ps => Object.values(ps).flat());
+      let currentBatchCount = allScheduledTasks.filter(st => st.jobCardNumber === task.jobCardNumber).length;
       
       const newScheduledTasksWithIds: ScheduledTask[] = [];
       scheduledItems.forEach(item => {

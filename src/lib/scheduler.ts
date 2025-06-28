@@ -101,7 +101,7 @@ export const generateIdealSchedule = async ({
       
       const batchSuffix = String.fromCharCode('A'.charCodeAt(0) + batchCounter++);
       const newScheduledTask: ScheduledTask = {
-        id: `${task.jobCardNumber}-${batchSuffix}`,
+        id: `${task.jobCardNumber}-${pressNo}-${batchSuffix}`,
         jobCardNumber: task.jobCardNumber,
         itemCode: task.itemCode,
         material: task.material,
