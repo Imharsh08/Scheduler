@@ -15,6 +15,8 @@ import { ColorSettingsDialog } from '@/components/color-settings-dialog';
 import { ProductionConditionsDialog } from '@/components/production-conditions-dialog';
 import { AllScheduledTasksDialog } from '@/components/all-scheduled-tasks-dialog';
 import { generateSchedulePdf } from '@/lib/pdf-utils';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { EditScheduledTaskDialog } from '@/components/edit-scheduled-task-dialog';
 
 export default function Home() {
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
@@ -40,6 +42,9 @@ export default function Home() {
   const [isProductionConditionsDialogOpen, setIsProductionConditionsDialogOpen] = useState(false);
   const [isAllTasksDialogOpen, setIsAllTasksDialogOpen] = useState(false);
   const [dieColors, setDieColors] = useState<Record<number, string>>({});
+  
+  const [taskToRemove, setTaskToRemove] = useState<ScheduledTask | null>(null);
+  const [taskToEdit, setTaskToEdit] = useState<ScheduledTask | null>(null);
 
   useEffect(() => {
     try {
@@ -489,6 +494,109 @@ export default function Home() {
     generateSchedulePdf(pressNo, scheduleByPress, shiftsByPress);
   }
 
+  const handleRemoveRequest = (task: ScheduledTask) => {
+    setTaskToRemove(task);
+  };
+
+  const handleConfirmRemove = () => {
+    if (!taskToRemove) return;
+
+    const { pressNo, shiftId, timeTaken, scheduledQuantity, jobCardNumber, itemCode, material, priority } = taskToRemove;
+
+    setShiftsByPress(current => {
+      const pressShifts = JSON.parse(JSON.stringify(current[pressNo] || []));
+      const shiftToUpdate = pressShifts.find((s: Shift) => s.id === shiftId);
+      if (shiftToUpdate) {
+        shiftToUpdate.remainingCapacity += timeTaken;
+      }
+      return { ...current, [pressNo]: pressShifts };
+    });
+    
+    setTasks(currentTasks => {
+      const existingTaskIndex = currentTasks.findIndex(t => t.jobCardNumber === jobCardNumber);
+      if (existingTaskIndex > -1) {
+        const newTasks = [...currentTasks];
+        newTasks[existingTaskIndex].remainingQuantity += scheduledQuantity;
+        return newTasks;
+      } else {
+        return [
+          ...currentTasks,
+          {
+            jobCardNumber,
+            itemCode,
+            material,
+            priority,
+            orderedQuantity: scheduledQuantity, 
+            remainingQuantity: scheduledQuantity,
+            creationDate: new Date().toISOString(),
+            deliveryDate: null
+          }
+        ];
+      }
+    });
+
+    setScheduleByPress(current => {
+      const pressSchedule = { ...(current[pressNo] || {}) };
+      const shiftTasks = (pressSchedule[shiftId] || []).filter(t => t.id !== taskToRemove.id);
+      pressSchedule[shiftId] = shiftTasks;
+      return { ...current, [pressNo]: pressSchedule };
+    });
+
+    toast({ title: "Task Removed", description: `Task ${jobCardNumber} has been removed from the schedule.` });
+    setTaskToRemove(null);
+  };
+
+  const handleCancelRemove = () => {
+    setTaskToRemove(null);
+  };
+
+  const handleEditRequest = (task: ScheduledTask) => {
+    setTaskToEdit(task);
+  };
+
+  const handleCancelEdit = () => {
+      setTaskToEdit(null);
+  }
+
+  const handleUpdateScheduledTask = (updatedDetails: Partial<ScheduledTask>) => {
+      if(!taskToEdit) return;
+
+      const { pressNo, shiftId, scheduledQuantity: oldQty, timeTaken: oldTime } = taskToEdit;
+      const { scheduledQuantity: newQty, timeTaken: newTime, endTime: newEndTime } = updatedDetails;
+
+      if(newQty === undefined || newTime === undefined || newEndTime === undefined) return;
+
+      const qtyDifference = newQty - oldQty;
+      const timeDifference = newTime - oldTime;
+      
+      setTasks(currentTasks => currentTasks.map(t => 
+          t.jobCardNumber === taskToEdit.jobCardNumber
+          ? { ...t, remainingQuantity: t.remainingQuantity - qtyDifference }
+          : t
+      ).filter(t => t.remainingQuantity > 0));
+
+      setShiftsByPress(current => {
+          const pressShifts = JSON.parse(JSON.stringify(current[pressNo] || []));
+          const shiftToUpdate = pressShifts.find((s: Shift) => s.id === shiftId);
+          if (shiftToUpdate) {
+              shiftToUpdate.remainingCapacity -= timeDifference;
+          }
+          return { ...current, [pressNo]: pressShifts };
+      });
+
+      setScheduleByPress(current => {
+          const pressSchedule = { ...(current[pressNo] || {}) };
+          const shiftTasks = (pressSchedule[shiftId] || []).map(t => 
+              t.id === taskToEdit.id ? { ...t, ...updatedDetails } : t
+          );
+          pressSchedule[shiftId] = shiftTasks;
+          return { ...current, [pressNo]: pressSchedule };
+      });
+
+      toast({ title: "Task Updated", description: `Task ${taskToEdit.jobCardNumber} quantity has been adjusted.` });
+      setTaskToEdit(null);
+  };
+
   return (
     <div className="flex flex-col h-screen bg-background text-foreground">
       <Header
@@ -529,6 +637,8 @@ export default function Home() {
                 onDrop={handleDrop}
                 dieColors={dieColors}
                 selectedPress={selectedPress}
+                onRemoveRequest={handleRemoveRequest}
+                onEditRequest={handleEditRequest}
               />
             </div>
         </div>
@@ -568,6 +678,33 @@ export default function Home() {
         scheduleByPress={scheduleByPress}
         shiftsByPress={shiftsByPress}
       />
+      {taskToRemove && (
+        <AlertDialog open onOpenChange={(open) => !open && setTaskToRemove(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will remove task "{taskToRemove.jobCardNumber}" ({taskToRemove.itemCode}) from the schedule. Its time and quantity will be returned. This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={handleCancelRemove}>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={handleConfirmRemove}>Continue</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
+      {taskToEdit && (
+          <EditScheduledTaskDialog
+              open={!!taskToEdit}
+              onOpenChange={handleCancelEdit}
+              task={taskToEdit}
+              shift={(shiftsByPress[taskToEdit.pressNo] || []).find(s => s.id === taskToEdit.shiftId) || null}
+              mainTaskList={tasks}
+              productionConditions={productionConditions}
+              onUpdate={handleUpdateScheduledTask}
+          />
+      )}
     </div>
   );
 }

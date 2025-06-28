@@ -1,6 +1,6 @@
 
 import React from 'react';
-import type { Shift, Schedule } from '@/types';
+import type { Shift, Schedule, ScheduledTask } from '@/types';
 import { ShiftSlot } from './shift-slot';
 import { PackageSearch } from 'lucide-react';
 
@@ -10,11 +10,13 @@ interface ScheduleGridProps {
   onDrop: (e: React.DragEvent<HTMLDivElement>, shiftId: string) => void;
   dieColors: Record<number, string>;
   selectedPress: number | null;
+  onRemoveRequest: (task: ScheduledTask) => void;
+  onEditRequest: (task: ScheduledTask) => void;
 }
 
 const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
-export const ScheduleGrid: React.FC<ScheduleGridProps> = ({ shifts, schedule, onDrop, dieColors, selectedPress }) => {
+export const ScheduleGrid: React.FC<ScheduleGridProps> = ({ shifts, schedule, onDrop, dieColors, selectedPress, onRemoveRequest, onEditRequest }) => {
 
   if (selectedPress === null) {
     return (
@@ -41,6 +43,8 @@ export const ScheduleGrid: React.FC<ScheduleGridProps> = ({ shifts, schedule, on
                   scheduledTasks={schedule[shift.id] || []}
                   onDrop={onDrop}
                   dieColors={dieColors}
+                  onRemoveRequest={onRemoveRequest}
+                  onEditRequest={onEditRequest}
                 />
               ))}
           </div>
