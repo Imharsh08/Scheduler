@@ -1,19 +1,19 @@
 
 export const COLOR_PALETTE: string[] = [
-  'bg-sky-200 border-sky-400',
-  'bg-emerald-200 border-emerald-400',
-  'bg-amber-200 border-amber-400',
-  'bg-rose-200 border-rose-400',
-  'bg-violet-200 border-violet-400',
-  'bg-lime-200 border-lime-400',
-  'bg-cyan-200 border-cyan-400',
-  'bg-fuchsia-200 border-fuchsia-400',
-  'bg-orange-200 border-orange-400',
-  'bg-teal-200 border-teal-400',
-  'bg-indigo-200 border-indigo-400',
-  'bg-yellow-200 border-yellow-400',
-  'bg-pink-200 border-pink-400',
-  'bg-slate-200 border-slate-400',
+  'bg-sky-300 border-sky-500',
+  'bg-emerald-300 border-emerald-500',
+  'bg-amber-300 border-amber-500',
+  'bg-rose-300 border-rose-500',
+  'bg-violet-300 border-violet-500',
+  'bg-lime-300 border-lime-500',
+  'bg-cyan-300 border-cyan-500',
+  'bg-fuchsia-300 border-fuchsia-500',
+  'bg-orange-300 border-orange-500',
+  'bg-teal-300 border-teal-500',
+  'bg-indigo-300 border-indigo-500',
+  'bg-yellow-300 border-yellow-500',
+  'bg-pink-300 border-pink-500',
+  'bg-slate-300 border-slate-500',
 ];
 
 
