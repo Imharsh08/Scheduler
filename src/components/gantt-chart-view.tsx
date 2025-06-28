@@ -6,7 +6,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import type { Schedule, ScheduledTask, Shift } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { PackageSearch } from 'lucide-react';
-import { getDieColorClass } from '@/lib/color-utils';
+import { getDieChartColor } from '@/lib/color-utils';
 import { format } from 'date-fns';
 
 interface GanttChartViewProps {
@@ -53,7 +53,7 @@ export const GanttChartView: React.FC<GanttChartViewProps> = ({
         shiftLabel: shiftLabelMap.get(task.shiftId) || task.shiftId,
         yAxisLabel: `${task.jobCardNumber} (${shiftLabelMap.get(task.shiftId)})`,
         timeRange: [new Date(task.startTime).getTime(), new Date(task.endTime).getTime()],
-        fill: getDieColorClass(task.dieNo, dieColors),
+        fill: getDieChartColor(task.dieNo, dieColors),
         task,
     }));
     
