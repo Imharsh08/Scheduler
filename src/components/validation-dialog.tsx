@@ -240,6 +240,9 @@ export const ValidationDialog: React.FC<ValidationDialogProps> = ({ request, pro
             shiftId: currentShift.id,
             startTime: taskStartTime.toISOString(),
             endTime: taskEndTime.toISOString(),
+            creationDate: task.creationDate,
+            deliveryDate: task.deliveryDate,
+            orderedQuantity: task.orderedQuantity,
         });
 
         remainingQtyToSchedule -= qtyForThisShift;
@@ -293,6 +296,9 @@ export const ValidationDialog: React.FC<ValidationDialogProps> = ({ request, pro
       shiftId: shift.id,
       startTime: taskStartTime.toISOString(),
       endTime: taskEndTime.toISOString(),
+      creationDate: task.creationDate,
+      deliveryDate: task.deliveryDate,
+      orderedQuantity: task.orderedQuantity,
     };
     onSuccess([newScheduledTask]);
   };

@@ -41,6 +41,9 @@ export interface ScheduledTask {
   shiftId: string;
   startTime: string; // ISO 8601 date string
   endTime: string; // ISO 8601 date string
+  orderedQuantity: number;
+  creationDate: string; // ISO 8601 date string
+  deliveryDate?: string | null; // ISO 8601 date string
 }
 
 export type Schedule = Record<string, ScheduledTask[]>; // key is shiftId

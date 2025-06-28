@@ -501,7 +501,7 @@ export default function Home() {
   const handleConfirmRemove = () => {
     if (!taskToRemove) return;
 
-    const { pressNo, shiftId, timeTaken, scheduledQuantity, jobCardNumber, itemCode, material, priority } = taskToRemove;
+    const { pressNo, shiftId, timeTaken, scheduledQuantity, jobCardNumber, itemCode, material, priority, creationDate, deliveryDate, orderedQuantity } = taskToRemove;
 
     setShiftsByPress(current => {
       const pressShifts = JSON.parse(JSON.stringify(current[pressNo] || []));
@@ -519,6 +519,7 @@ export default function Home() {
         newTasks[existingTaskIndex].remainingQuantity += scheduledQuantity;
         return newTasks;
       } else {
+        // Task was fully scheduled, so add it back to the list preserving original data
         return [
           ...currentTasks,
           {
@@ -526,10 +527,10 @@ export default function Home() {
             itemCode,
             material,
             priority,
-            orderedQuantity: scheduledQuantity, 
+            orderedQuantity: orderedQuantity,
             remainingQuantity: scheduledQuantity,
-            creationDate: new Date().toISOString(),
-            deliveryDate: null
+            creationDate: creationDate,
+            deliveryDate: deliveryDate,
           }
         ];
       }
