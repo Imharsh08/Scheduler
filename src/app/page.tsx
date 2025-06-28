@@ -660,10 +660,6 @@ export default function Home() {
 
         const tasksToSchedule = Array.from(taskPool.values());
 
-        const otherPressTasks = tasks.filter(t => 
-            !productionConditions.some(pc => pc.itemCode === t.itemCode && pc.pressNo === pressNo)
-        );
-
         const freshShiftsForPress = JSON.parse(JSON.stringify(initialShifts));
         const { newSchedule, newShifts, remainingTasks } = await generateIdealSchedule({
             tasksToSchedule,
@@ -674,7 +670,7 @@ export default function Home() {
 
         setScheduleByPress(current => ({ ...current, [pressNo]: newSchedule }));
         setShiftsByPress(current => ({ ...current, [pressNo]: newShifts }));
-        setTasks([...otherPressTasks, ...remainingTasks]);
+        setTasks(remainingTasks);
         
         toast({
             title: "Schedule Generated Successfully",
