@@ -60,8 +60,8 @@ export const TaskList: React.FC<TaskListProps> = ({ tasks, onDragStart, onLoadTa
             </Button>
         </div>
       </CardHeader>
-      <CardContent className="flex-1 overflow-hidden">
-        <div className="space-y-4 h-full overflow-y-auto pr-2">
+      <CardContent className="flex-1 overflow-y-auto">
+        <div className="space-y-4">
           {isLoading && tasks.length === 0 ? (
              <div className="flex justify-center items-center h-full">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
