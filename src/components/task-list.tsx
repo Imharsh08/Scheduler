@@ -47,7 +47,7 @@ export const TaskList: React.FC<TaskListProps> = ({ tasks, onDragStart, onLoadTa
   }, [tasks]);
 
   return (
-    <Card className="shadow-lg flex-1 flex flex-col">
+    <Card className="shadow-lg flex-1 flex flex-col overflow-hidden">
       <CardHeader>
         <div className="flex justify-between items-center">
             <div className='flex items-center gap-2'>
