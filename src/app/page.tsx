@@ -17,6 +17,7 @@ import { AllScheduledTasksDialog } from '@/components/all-scheduled-tasks-dialog
 import { generateSchedulePdf } from '@/lib/pdf-utils';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { EditScheduledTaskDialog } from '@/components/edit-scheduled-task-dialog';
+import { generateIdealSchedule } from '@/lib/scheduler';
 
 export default function Home() {
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
@@ -45,6 +46,7 @@ export default function Home() {
   
   const [taskToRemove, setTaskToRemove] = useState<ScheduledTask | null>(null);
   const [taskToEdit, setTaskToEdit] = useState<ScheduledTask | null>(null);
+  const [generatingPressNo, setGeneratingPressNo] = useState<number | null>(null);
 
   useEffect(() => {
     try {
@@ -623,6 +625,74 @@ export default function Home() {
     setTaskToEdit(null);
   };
 
+  const handleGenerateIdealSchedule = async (pressNo: number) => {
+    setGeneratingPressNo(pressNo);
+    toast({
+        title: `Generating schedule for Press ${pressNo}...`,
+        description: "This may take a moment. Please wait.",
+    });
+
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    try {
+        const taskPool = new Map<string, Task>();
+        tasks.forEach(task => {
+            taskPool.set(task.jobCardNumber, JSON.parse(JSON.stringify(task)));
+        });
+
+        const scheduledTasksOnPress = scheduleByPress[pressNo] ? Object.values(scheduleByPress[pressNo]).flat() : [];
+        scheduledTasksOnPress.forEach(st => {
+            if (taskPool.has(st.jobCardNumber)) {
+                taskPool.get(st.jobCardNumber)!.remainingQuantity += st.scheduledQuantity;
+            } else {
+                taskPool.set(st.jobCardNumber, {
+                    jobCardNumber: st.jobCardNumber,
+                    orderedQuantity: st.orderedQuantity,
+                    itemCode: st.itemCode,
+                    material: st.material,
+                    remainingQuantity: st.scheduledQuantity,
+                    priority: st.priority,
+                    creationDate: st.creationDate,
+                    deliveryDate: st.deliveryDate,
+                });
+            }
+        });
+
+        const tasksToSchedule = Array.from(taskPool.values());
+
+        const otherPressTasks = tasks.filter(t => 
+            !productionConditions.some(pc => pc.itemCode === t.itemCode && pc.pressNo === pressNo)
+        );
+
+        const freshShiftsForPress = JSON.parse(JSON.stringify(initialShifts));
+        const { newSchedule, newShifts, remainingTasks } = await generateIdealSchedule({
+            tasksToSchedule,
+            productionConditions,
+            shifts: freshShiftsForPress,
+            pressNo,
+        });
+
+        setScheduleByPress(current => ({ ...current, [pressNo]: newSchedule }));
+        setShiftsByPress(current => ({ ...current, [pressNo]: newShifts }));
+        setTasks([...otherPressTasks, ...remainingTasks]);
+        
+        toast({
+            title: "Schedule Generated Successfully",
+            description: `A new optimized schedule has been created for Press ${pressNo}.`,
+        });
+
+    } catch (error) {
+        console.error("Failed to generate ideal schedule:", error);
+        toast({
+            title: "Error Generating Schedule",
+            description: error instanceof Error ? error.message : "An unknown error occurred.",
+            variant: "destructive",
+        });
+    } finally {
+        setGeneratingPressNo(null);
+    }
+  };
+
 
   return (
     <div className="flex flex-col h-screen bg-background text-foreground">
@@ -644,6 +714,8 @@ export default function Home() {
           productionConditions={productionConditions}
           onPressSelect={handlePressSelect}
           selectedPress={selectedPress}
+          onGenerateIdealSchedule={handleGenerateIdealSchedule}
+          generatingPressNo={generatingPressNo}
         />
         <div className="flex-1 flex flex-col lg:flex-row gap-6 overflow-hidden">
             <div className="lg:w-1/3 flex flex-col pr-2">

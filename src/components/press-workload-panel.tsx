@@ -13,9 +13,11 @@ interface PressWorkloadPanelProps {
   productionConditions: ProductionCondition[];
   onPressSelect: (pressNo: number | null) => void;
   selectedPress: number | null;
+  onGenerateIdealSchedule: (pressNo: number) => void;
+  generatingPressNo: number | null;
 }
 
-export const PressWorkloadPanel: React.FC<PressWorkloadPanelProps> = ({ tasks, scheduleByPress, productionConditions, onPressSelect, selectedPress }) => {
+export const PressWorkloadPanel: React.FC<PressWorkloadPanelProps> = ({ tasks, scheduleByPress, productionConditions, onPressSelect, selectedPress, onGenerateIdealSchedule, generatingPressNo }) => {
 
   const pressWorkloads = useMemo(() => {
     if (productionConditions.length === 0) return [];
@@ -84,6 +86,8 @@ export const PressWorkloadPanel: React.FC<PressWorkloadPanelProps> = ({ tasks, s
                   workload={workload}
                   onClick={() => onPressSelect(workload.pressNo)}
                   isSelected={selectedPress === workload.pressNo}
+                  onGenerateIdealSchedule={onGenerateIdealSchedule}
+                  isGenerating={generatingPressNo === workload.pressNo}
                 />
               ))}
             </div>
