@@ -47,12 +47,12 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onDragStart, onSchedul
           "hover:shadow-md transition-shadow duration-200 bg-card hover:border-primary",
           task.priority === 'High' && "border-destructive hover:border-destructive/80"
       )}>
-        <CardHeader className="flex flex-row items-start justify-between p-4 pb-2">
-            <div className="flex items-center gap-4">
-                <Package className="w-6 h-6 text-primary" />
+        <CardHeader className="flex flex-row items-start justify-between p-3 pb-2">
+            <div className="flex items-center gap-3">
+                <Package className="w-5 h-5 text-primary" />
                 <div>
                     <CardTitle className="text-base font-bold">{task.jobCardNumber}</CardTitle>
-                    <CardDescription>{task.itemCode}</CardDescription>
+                    <CardDescription className="text-xs">{task.itemCode}</CardDescription>
                 </div>
             </div>
             <div className="flex items-center gap-2">
@@ -66,17 +66,17 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onDragStart, onSchedul
                     {task.priority}
                 </Badge>
               )}
-              <GripVertical className="text-muted-foreground" />
+              <GripVertical className="text-muted-foreground w-5 h-5" />
             </div>
         </CardHeader>
-        <CardContent className="p-4 pt-0">
-          <div className="flex justify-between items-center mb-2">
+        <CardContent className="px-3 pt-0 pb-2">
+          <div className="flex justify-between items-center mb-1">
             <div>
-              <p className="text-sm font-medium">Quantity: <span className="font-bold text-lg">{task.remainingQuantity}</span></p>
+              <p className="text-sm font-medium">Quantity: <span className="font-bold">{task.remainingQuantity}</span></p>
             </div>
             <Badge variant="secondary">{task.material}</Badge>
           </div>
-          <div className="flex flex-col gap-2 text-xs text-muted-foreground mt-2">
+          <div className="flex flex-col gap-1 text-xs text-muted-foreground mt-1">
             {task.deliveryDate && (
                 <div className="flex items-center gap-2">
                     <CalendarDays className="w-3 h-3" />
@@ -91,7 +91,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onDragStart, onSchedul
             )}
           </div>
         </CardContent>
-        <CardFooter className="p-4 pt-0 flex justify-end">
+        <CardFooter className="p-3 pt-0 flex justify-end">
             <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                     <Button variant="outline" size="sm" disabled={isSchedulingDisabled}>
