@@ -43,12 +43,25 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   selectedPress
 }) => {
   const [waitingTime, setWaitingTime] = useState('');
+  const [formattedDeliveryDate, setFormattedDeliveryDate] = useState('');
 
   useEffect(() => {
     if (task.creationDate) {
       setWaitingTime(formatDistanceToNow(new Date(task.creationDate), { addSuffix: true }));
     }
   }, [task.creationDate]);
+
+  useEffect(() => {
+    if (task.deliveryDate) {
+      try {
+        setFormattedDeliveryDate(format(new Date(task.deliveryDate), 'dd MMM yyyy'));
+      } catch (e) {
+        setFormattedDeliveryDate('Invalid Date');
+      }
+    } else {
+      setFormattedDeliveryDate('');
+    }
+  }, [task.deliveryDate]);
 
   const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
@@ -117,10 +130,10 @@ export const TaskCard: React.FC<TaskCardProps> = ({
 
           <div className="flex items-end justify-between">
             <div className="flex flex-col gap-1 text-xs text-muted-foreground">
-              {task.deliveryDate && (
+              {task.deliveryDate && formattedDeliveryDate && (
                   <div className="flex items-center gap-2">
                       <CalendarDays className="w-3 h-3" />
-                      <span>Deliver by: {format(new Date(task.deliveryDate), 'dd MMM yyyy')}</span>
+                      <span>Deliver by: {formattedDeliveryDate}</span>
                   </div>
               )}
               {waitingTime && (
