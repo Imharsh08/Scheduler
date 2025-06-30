@@ -60,7 +60,7 @@ You can download a `.zip` file of your entire project to your local computer. Wh
 
 2.  **Run the Export Command**: In the terminal, type the following command and press Enter:
     ```bash
-    firebase studio:export --zip prosched-app.zip
+    firebase studio:export prosched-app.zip
     ```
     This command tells Studio to package your entire project into a single zip file named `prosched-app.zip`.
 
