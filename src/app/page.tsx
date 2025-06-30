@@ -455,15 +455,11 @@ export default function Home() {
     setScheduleByPress(current => {
       const pressSchedule = { ...(current[pressToUpdate] || {}) };
       
-      const allScheduledTasks = Object.values(current).flatMap(ps => Object.values(ps).flat());
-      let currentBatchCount = allScheduledTasks.filter(st => st.jobCardNumber === task.jobCardNumber).length;
-      
       const newScheduledTasksWithIds: ScheduledTask[] = [];
       scheduledItems.forEach(item => {
         totalQuantityScheduled += item.scheduledQuantity;
-        const batchSuffix = String.fromCharCode('A'.charCodeAt(0) + currentBatchCount);
-        const newId = `${item.jobCardNumber}-${item.pressNo}-${batchSuffix}`;
-        currentBatchCount++;
+        // Use a more robust unique ID to prevent key collisions
+        const newId = `${item.jobCardNumber}-${item.pressNo}-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
         newScheduledTasksWithIds.push({ ...item, id: newId });
       });
 

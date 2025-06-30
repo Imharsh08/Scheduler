@@ -77,7 +77,6 @@ export const generateIdealSchedule = async ({
     if (piecesPerCycle <= 0 || bestCondition.cureTime <= 0) continue;
 
     let remainingQtyForThisTask = tasksMap.get(task.jobCardNumber)!.remainingQuantity;
-    let batchCounter = 0;
 
     for (const shift of localShifts) {
       if (remainingQtyForThisTask <= 0) break;
@@ -99,9 +98,8 @@ export const generateIdealSchedule = async ({
       const taskStartTime = addMinutes(shiftStartDateTime, timeUsedInShift);
       const taskEndTime = addMinutes(taskStartTime, timeTaken);
       
-      const batchSuffix = String.fromCharCode('A'.charCodeAt(0) + batchCounter++);
       const newScheduledTask: ScheduledTask = {
-        id: `${task.jobCardNumber}-${pressNo}-${batchSuffix}`,
+        id: `${task.jobCardNumber}-${pressNo}-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
         jobCardNumber: task.jobCardNumber,
         itemCode: task.itemCode,
         material: task.material,
