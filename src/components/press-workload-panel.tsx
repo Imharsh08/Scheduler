@@ -1,11 +1,17 @@
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import type { Task, Schedule, ProductionCondition, PressWorkload } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Layers, X } from 'lucide-react';
+import { Layers, X, ChevronDown } from 'lucide-react';
 import { PressWorkloadCard } from './press-workload-card';
 import { ScrollArea, ScrollBar } from './ui/scroll-area';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible"
+import { cn } from '@/lib/utils';
 
 interface PressWorkloadPanelProps {
   tasks: Task[];
@@ -18,6 +24,7 @@ interface PressWorkloadPanelProps {
 }
 
 export const PressWorkloadPanel: React.FC<PressWorkloadPanelProps> = ({ tasks, scheduleByPress, productionConditions, onPressSelect, selectedPress, onGenerateIdealSchedule, generatingPressNo }) => {
+  const [isOpen, setIsOpen] = useState(true);
 
   const pressWorkloads = useMemo(() => {
     if (productionConditions.length === 0) return [];
@@ -61,42 +68,55 @@ export const PressWorkloadPanel: React.FC<PressWorkloadPanelProps> = ({ tasks, s
 
 
   return (
-    <Card className="shadow-lg">
-      <CardHeader>
-        <div className="flex justify-between items-center">
-            <div className='flex items-center gap-2'>
-                <Layers className="w-6 h-6" />
-                <CardTitle className="font-headline">Press Workload</CardTitle>
-            </div>
-            {selectedPress !== null && (
-                <Button variant="ghost" size="sm" onClick={() => onPressSelect(null)}>
-                    <X className="mr-2 h-4 w-4" />
-                    Clear Filter
-                </Button>
-            )}
-        </div>
-      </CardHeader>
-      <CardContent>
-        {pressWorkloads.length > 0 ? (
-          <ScrollArea className="w-full whitespace-nowrap">
-            <div className="flex w-max space-x-4 pb-4">
-              {pressWorkloads.map(workload => (
-                <PressWorkloadCard
-                  key={workload.pressNo}
-                  workload={workload}
-                  onClick={() => onPressSelect(workload.pressNo)}
-                  isSelected={selectedPress === workload.pressNo}
-                  onGenerateIdealSchedule={onGenerateIdealSchedule}
-                  isGenerating={generatingPressNo === workload.pressNo}
-                />
-              ))}
-            </div>
-            <ScrollBar orientation="horizontal" />
-          </ScrollArea>
-        ) : (
-          <p className="text-muted-foreground text-center py-4">Load production conditions to see press workloads.</p>
-        )}
-      </CardContent>
-    </Card>
+    <Collapsible
+      open={isOpen}
+      onOpenChange={setIsOpen}
+    >
+      <Card className="shadow-lg">
+        <CardHeader>
+          <div className="flex justify-between items-center">
+              <div className='flex items-center gap-2'>
+                  <Layers className="w-6 h-6" />
+                  <CardTitle className="font-headline">Press Workload</CardTitle>
+                  <CollapsibleTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-8 w-8">
+                      <ChevronDown className={cn("h-4 w-4 transition-transform", isOpen && "rotate-180")} />
+                      <span className="sr-only">Toggle Workload Panel</span>
+                    </Button>
+                  </CollapsibleTrigger>
+              </div>
+              {selectedPress !== null && (
+                  <Button variant="ghost" size="sm" onClick={() => onPressSelect(null)}>
+                      <X className="mr-2 h-4 w-4" />
+                      Clear Filter
+                  </Button>
+              )}
+          </div>
+        </CardHeader>
+        <CollapsibleContent>
+            <CardContent>
+              {pressWorkloads.length > 0 ? (
+                <ScrollArea className="w-full whitespace-nowrap">
+                  <div className="flex w-max space-x-4 pb-4">
+                    {pressWorkloads.map(workload => (
+                      <PressWorkloadCard
+                        key={workload.pressNo}
+                        workload={workload}
+                        onClick={() => onPressSelect(workload.pressNo)}
+                        isSelected={selectedPress === workload.pressNo}
+                        onGenerateIdealSchedule={onGenerateIdealSchedule}
+                        isGenerating={generatingPressNo === workload.pressNo}
+                      />
+                    ))}
+                  </div>
+                  <ScrollBar orientation="horizontal" />
+                </ScrollArea>
+              ) : (
+                <p className="text-muted-foreground text-center py-4">Load production conditions to see press workloads.</p>
+              )}
+            </CardContent>
+        </CollapsibleContent>
+      </Card>
+    </Collapsible>
   );
 };
