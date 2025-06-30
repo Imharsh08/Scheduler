@@ -1,4 +1,5 @@
 
+
 export interface Task {
   jobCardNumber: string;
   orderedQuantity: number;
@@ -21,8 +22,9 @@ export interface ProductionCondition {
 }
 
 export interface Shift {
-  id: string; // e.g., 'monday-day'
-  day: string;
+  id: string; // e.g., '2024-07-15-day'
+  date: string; // e.g., '2024-07-15'
+  day: string; // e.g., 'Monday'
   type: 'Day' | 'Night';
   capacity: number; // in minutes (e.g., 12 hours * 60 min = 720)
   remainingCapacity: number;

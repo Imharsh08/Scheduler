@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Factory, Save, Loader2, Settings, Menu, Palette, RefreshCw, Settings2, GanttChartSquare, Download, LayoutGrid, BarChart2, Check, Eye } from 'lucide-react';
+import { Factory, Save, Loader2, Settings, Menu, Palette, RefreshCw, Settings2, GanttChartSquare, Download, LayoutGrid, BarChart2, Check, Eye, CalendarDays } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -20,6 +20,7 @@ interface HeaderProps {
   onOpenIntegrationDialog: () => void;
   onOpenColorSettingsDialog: () => void;
   onOpenProductionConditionsDialog: () => void;
+  onOpenScheduleSettingsDialog: () => void;
   onRefreshData: () => void;
   onViewAllTasksClick: () => void;
   onDownloadPdfClick: (pressNo: 'all' | number) => void;
@@ -34,6 +35,7 @@ export const Header: React.FC<HeaderProps> = ({
     onOpenIntegrationDialog, 
     onOpenColorSettingsDialog, 
     onOpenProductionConditionsDialog,
+    onOpenScheduleSettingsDialog,
     onRefreshData,
     onViewAllTasksClick,
     onDownloadPdfClick,
@@ -120,13 +122,17 @@ export const Header: React.FC<HeaderProps> = ({
                 </DropdownMenuPortal>
             </DropdownMenuSub>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={onOpenIntegrationDialog}>
-              <Settings className="mr-2 h-4 w-4" />
-              <span>Integrations</span>
+            <DropdownMenuItem onClick={onOpenScheduleSettingsDialog}>
+              <CalendarDays className="mr-2 h-4 w-4" />
+              <span>Schedule Settings</span>
             </DropdownMenuItem>
             <DropdownMenuItem onClick={onOpenColorSettingsDialog}>
               <Palette className="mr-2 h-4 w-4" />
               <span>Die Color Settings</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={onOpenIntegrationDialog}>
+              <Settings className="mr-2 h-4 w-4" />
+              <span>Integrations</span>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

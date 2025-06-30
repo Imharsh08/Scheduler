@@ -7,7 +7,7 @@ import { TaskList } from '@/components/task-list';
 import { ScheduleGrid } from '@/components/schedule-grid';
 import { PressWorkloadPanel } from '@/components/press-workload-panel';
 import { ValidationDialog } from '@/components/validation-dialog';
-import { initialShifts, initialProductionConditions, initialTasks } from '@/lib/mock-data';
+import { initialProductionConditions, initialTasks } from '@/lib/mock-data';
 import type { Task, Shift, Schedule, ProductionCondition, ScheduledTask, ValidationRequest, IntegrationUrls } from '@/types';
 import { useToast } from "@/hooks/use-toast";
 import { IntegrationDialog } from '@/components/integration-dialog';
@@ -19,6 +19,18 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { EditScheduledTaskDialog } from '@/components/edit-scheduled-task-dialog';
 import { generateIdealSchedule } from '@/lib/scheduler';
 import { GanttChartView } from '@/components/gantt-chart-view';
+import { ScheduleSettingsDialog } from '@/components/schedule-settings-dialog';
+import { 
+    startOfWeek, 
+    endOfWeek, 
+    startOfMonth, 
+    endOfMonth, 
+    eachDayOfInterval, 
+    format, 
+    isSameDay, 
+    getDay,
+    parseISO
+} from 'date-fns';
 
 export default function Home() {
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
@@ -43,12 +55,17 @@ export default function Home() {
   const [isColorSettingsDialogOpen, setIsColorSettingsDialogOpen] = useState(false);
   const [isProductionConditionsDialogOpen, setIsProductionConditionsDialogOpen] = useState(false);
   const [isAllTasksDialogOpen, setIsAllTasksDialogOpen] = useState(false);
+  const [isScheduleSettingsDialogOpen, setIsScheduleSettingsDialogOpen] = useState(false);
   const [dieColors, setDieColors] = useState<Record<number, string>>({});
   
   const [taskToRemove, setTaskToRemove] = useState<ScheduledTask | null>(null);
   const [taskToEdit, setTaskToEdit] = useState<ScheduledTask | null>(null);
   const [generatingPressNo, setGeneratingPressNo] = useState<number | null>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'gantt'>('grid');
+
+  const [scheduleHorizon, setScheduleHorizon] = useState<'weekly' | 'monthly'>('weekly');
+  const [holidays, setHolidays] = useState<Date[]>([]);
+  const [tempHolidays, setTempHolidays] = useState<Date[]>([]);
 
   useEffect(() => {
     try {
@@ -68,30 +85,79 @@ export default function Home() {
       if (savedViewMode) {
           setViewMode(savedViewMode);
       }
+      
+      const savedHorizon = localStorage.getItem('scheduleHorizon') as 'weekly' | 'monthly' | null;
+      if (savedHorizon) {
+          setScheduleHorizon(savedHorizon);
+      }
+      
+      const savedHolidays = localStorage.getItem('holidays');
+      if (savedHolidays) {
+          const parsedHolidays = JSON.parse(savedHolidays).map((d: string) => parseISO(d));
+          setHolidays(parsedHolidays);
+          setTempHolidays(parsedHolidays);
+      }
+
     } catch (error) {
       console.error("Failed to load data from localStorage", error);
     }
   }, []);
 
-  useEffect(() => {
-    if (productionConditions.length > 0) {
-      const pressNos = [...new Set(productionConditions.map(pc => pc.pressNo))];
-      
-      const newShiftsByPress: Record<number, Shift[]> = {};
-      pressNos.forEach(pressNo => {
-        // Ensure each press gets a deep copy of the initial shifts
-        newShiftsByPress[pressNo] = JSON.parse(JSON.stringify(initialShifts));
+  const generateShiftsForHorizon = (horizon: 'weekly' | 'monthly', holidays: Date[]) => {
+      const today = new Date();
+      // For weekly view, always show the current week starting on Monday
+      // For monthly view, show the current calendar month
+      const interval = horizon === 'weekly' 
+          ? { start: startOfWeek(today, { weekStartsOn: 1 }), end: endOfWeek(today, { weekStartsOn: 1 }) }
+          : { start: startOfMonth(today), end: endOfMonth(today) };
+
+      const daysInInterval = eachDayOfInterval(interval);
+      const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      const generatedShifts: Shift[] = [];
+
+      daysInInterval.forEach(day => {
+          const isHoliday = holidays.some(holiday => isSameDay(day, holiday));
+          if (isHoliday) {
+              return; // Skip this day
+          }
+
+          const dayName = dayNames[getDay(day)];
+          const dateStr = format(day, 'yyyy-MM-dd');
+          
+          generatedShifts.push({ id: `${dateStr}-day`, date: dateStr, day: dayName, type: 'Day', capacity: 720, remainingCapacity: 720 });
+          generatedShifts.push({ id: `${dateStr}-night`, date: dateStr, day: dayName, type: 'Night', capacity: 720, remainingCapacity: 720 });
       });
+      return generatedShifts;
+  };
+
+  useEffect(() => {
+      const pressNosFromConditions = productionConditions.map(pc => pc.pressNo);
+      const pressNosFromSchedule = Object.keys(scheduleByPress).map(Number);
+      const pressNos = [...new Set([...pressNosFromConditions, ...pressNosFromSchedule])].sort((a,b) => a - b);
+      
+      if (pressNos.length === 0) {
+          setShiftsByPress({});
+          return;
+      }
+      
+      const baseShifts = generateShiftsForHorizon(scheduleHorizon, holidays);
+      const newShiftsByPress: Record<number, Shift[]> = {};
+
+      pressNos.forEach(pressNo => {
+          const pressShifts = JSON.parse(JSON.stringify(baseShifts));
+          const pressSchedule = scheduleByPress[pressNo] || {};
+
+          Object.values(pressSchedule).flat().forEach(task => {
+              const shift = pressShifts.find((s: Shift) => s.id === task.shiftId);
+              if (shift) {
+                  shift.remainingCapacity -= task.timeTaken;
+              }
+          });
+          newShiftsByPress[pressNo] = pressShifts;
+      });
+
       setShiftsByPress(newShiftsByPress);
-
-      const newScheduleByPress: Record<number, Schedule> = {};
-        pressNos.forEach(pressNo => {
-          newScheduleByPress[pressNo] = {};
-        });
-      setScheduleByPress(newScheduleByPress);
-
-    }
-  }, [productionConditions]);
+  }, [productionConditions, scheduleHorizon, holidays, scheduleByPress]);
 
   const handleSetViewMode = (mode: 'grid' | 'gantt') => {
     setViewMode(mode);
@@ -105,6 +171,31 @@ export default function Home() {
             variant: "destructive"
         })
     }
+  };
+  
+  const handleSaveScheduleSettings = () => {
+    setHolidays(tempHolidays);
+    try {
+      localStorage.setItem('scheduleHorizon', scheduleHorizon);
+      localStorage.setItem('holidays', JSON.stringify(tempHolidays));
+      toast({
+        title: "Settings Saved",
+        description: "Your schedule settings have been updated.",
+      });
+    } catch (error) {
+       console.error("Failed to save schedule settings to localStorage", error);
+       toast({
+        title: "Error Saving Settings",
+        description: "Could not save settings to your browser's local storage.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleOpenScheduleSettings = () => {
+    // Reset temp state to current state when opening
+    setTempHolidays(holidays);
+    setIsScheduleSettingsDialogOpen(true);
   };
 
   const handleLoadTasks = async (taskUrl?: string) => {
@@ -133,21 +224,31 @@ export default function Home() {
         throw new Error(`Error from Google Script: ${data.error}`);
       }
 
-      const fetchedTasks: Task[] = data.map((item: any) => ({
-        jobCardNumber: item.jobCardNumber,
-        orderedQuantity: item.orderedQuantity,
-        itemCode: item.itemCode,
-        material: item.material,
-        remainingQuantity: item.orderedQuantity,
-        priority: item.priority || 'None',
-        creationDate: item.creationDate ? new Date(item.creationDate).toISOString() : new Date().toISOString(),
-        deliveryDate: item.deliveryDate ? new Date(item.deliveryDate).toISOString() : null,
-      }));
+      const scheduledQuantities: Record<string, number> = {};
+      Object.values(scheduleByPress).flat().forEach(pressSchedule => {
+        Object.values(pressSchedule).flat().forEach(task => {
+          scheduledQuantities[task.jobCardNumber] = (scheduledQuantities[task.jobCardNumber] || 0) + task.scheduledQuantity;
+        });
+      });
+
+      const fetchedTasks: Task[] = data.map((item: any) => {
+        const alreadyScheduled = scheduledQuantities[item.jobCardNumber] || 0;
+        return {
+          jobCardNumber: item.jobCardNumber,
+          orderedQuantity: item.orderedQuantity,
+          itemCode: item.itemCode,
+          material: item.material,
+          remainingQuantity: item.orderedQuantity - alreadyScheduled,
+          priority: item.priority || 'None',
+          creationDate: item.creationDate ? new Date(item.creationDate).toISOString() : new Date().toISOString(),
+          deliveryDate: item.deliveryDate ? new Date(item.deliveryDate).toISOString() : null,
+        }
+      }).filter((task: Task) => task.remainingQuantity > 0);
 
       setTasks(fetchedTasks);
       toast({
         title: "Success",
-        description: `Loaded ${fetchedTasks.length} tasks successfully.`,
+        description: `Loaded ${data.length} tasks and updated quantities based on the current schedule.`,
       });
 
     } catch (error) {
@@ -676,7 +777,8 @@ export default function Home() {
 
         const tasksToSchedule = Array.from(taskPool.values());
 
-        const freshShiftsForPress = JSON.parse(JSON.stringify(initialShifts));
+        const freshShiftsForPress = generateShiftsForHorizon(scheduleHorizon, holidays);
+        
         const { newSchedule, newShifts, remainingTasks } = await generateIdealSchedule({
             tasksToSchedule,
             productionConditions,
@@ -722,6 +824,7 @@ export default function Home() {
         onOpenIntegrationDialog={() => setIsIntegrationDialogOpen(true)}
         onOpenColorSettingsDialog={() => setIsColorSettingsDialogOpen(true)}
         onOpenProductionConditionsDialog={() => setIsProductionConditionsDialogOpen(true)}
+        onOpenScheduleSettingsDialog={handleOpenScheduleSettings}
         onRefreshData={handleRefreshData}
         onViewAllTasksClick={() => setIsAllTasksDialogOpen(true)}
         onDownloadPdfClick={handleDownloadPdf}
@@ -804,6 +907,15 @@ export default function Home() {
         onOpenChange={setIsProductionConditionsDialogOpen}
         productionConditions={productionConditions}
         isLoading={isLoadingConditions}
+      />
+      <ScheduleSettingsDialog
+        open={isScheduleSettingsDialogOpen}
+        onOpenChange={setIsScheduleSettingsDialogOpen}
+        horizon={scheduleHorizon}
+        onHorizonChange={setScheduleHorizon}
+        holidays={tempHolidays}
+        onHolidaysChange={(dates) => setTempHolidays(dates || [])}
+        onSave={handleSaveScheduleSettings}
       />
        <AllScheduledTasksDialog
         open={isAllTasksDialogOpen}
