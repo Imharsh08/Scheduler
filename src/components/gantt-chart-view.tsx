@@ -7,7 +7,33 @@ import type { Schedule, ScheduledTask, Shift } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { PackageSearch } from 'lucide-react';
 import { getDieChartColor } from '@/lib/color-utils';
-import { format } from 'date-fns';
+import { format, startOfWeek, nextDay, setHours, setMinutes, setSeconds, addMinutes } from 'date-fns';
+
+// Helper to get the absolute start date and time of a shift
+const dayIndexMap: Record<string, 0 | 1 | 2 | 3 | 4 | 5 | 6> = {
+  Sunday: 0,
+  Monday: 1,
+  Tuesday: 2,
+  Wednesday: 3,
+  Thursday: 4,
+  Friday: 5,
+  Saturday: 6,
+};
+
+const getShiftStartDateTime = (shift: Shift): Date => {
+  const now = new Date();
+  const thisMonday = startOfWeek(now, { weekStartsOn: 1 });
+  const targetDayIndex = dayIndexMap[shift.day];
+  
+  let shiftDate = nextDay(thisMonday, targetDayIndex);
+
+  if (shiftDate < now && format(shiftDate, 'yyyy-MM-dd') !== format(now, 'yyyy-MM-dd')) {
+    shiftDate = nextDay(addMinutes(thisMonday, 10080), targetDayIndex);
+  }
+
+  const hours = shift.type === 'Day' ? 8 : 20;
+  return setSeconds(setMinutes(setHours(shiftDate, hours), 0), 0);
+};
 
 interface GanttChartViewProps {
   scheduleByPress: Record<number, Schedule>;
@@ -20,6 +46,17 @@ const CustomTooltip = ({ active, payload }: any) => {
   if (active && payload && payload.length) {
     const data = payload[0].payload;
     const task = data.task as ScheduledTask;
+
+    if (data.type === 'vacant') {
+        return (
+          <div className="bg-background p-2 border rounded shadow-lg text-sm">
+            <p className="font-bold">{task.jobCardNumber}</p>
+            <p><span className="font-medium">Shift:</span> {data.shiftLabel}</p>
+            <p><span className="font-medium">Available Time:</span> {task.timeTaken} min</p>
+          </div>
+        );
+    }
+
     return (
       <div className="bg-background p-2 border rounded shadow-lg text-sm">
         <p className="font-bold">{task.jobCardNumber} <span className="font-normal text-muted-foreground">({task.itemCode})</span></p>
@@ -44,22 +81,71 @@ export const GanttChartView: React.FC<GanttChartViewProps> = ({
     const pressSchedule = scheduleByPress[selectedPress] || {};
     const pressShifts = shiftsByPress[selectedPress] || [];
     
-    const flattenedTasks = Object.values(pressSchedule).flat().sort((a,b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
-
     const shiftLabelMap = new Map<string, string>();
     pressShifts.forEach(shift => shiftLabelMap.set(shift.id, `${shift.day.substring(0,3)} ${shift.type}`));
 
-    const chartData = flattenedTasks.map(task => ({
-        shiftLabel: shiftLabelMap.get(task.shiftId) || task.shiftId,
+    const allScheduledTasks = Object.values(pressSchedule).flat();
+    
+    let chartDataItems: any[] = [];
+
+    // Map scheduled tasks to chart data
+    const taskChartItems = allScheduledTasks.map(task => ({
+        type: 'task',
         yAxisLabel: `${task.jobCardNumber} (${shiftLabelMap.get(task.shiftId)})`,
         timeRange: [new Date(task.startTime).getTime(), new Date(task.endTime).getTime()],
         fill: getDieChartColor(task.dieNo, dieColors),
         task,
+        shiftLabel: shiftLabelMap.get(task.shiftId) || task.shiftId,
     }));
-    
-    const yAxisDomain = chartData.map(d => d.yAxisLabel);
+    chartDataItems.push(...taskChartItems);
 
-    return { chartData, yAxisDomain };
+    // Map vacant slots
+    pressShifts.forEach(shift => {
+        if (shift.remainingCapacity > 0) {
+            const shiftTasks = allScheduledTasks.filter(t => t.shiftId === shift.id);
+            
+            let vacantStartTime: Date;
+            if (shiftTasks.length > 0) {
+                const lastTask = shiftTasks.reduce((latest, current) => 
+                    new Date(current.endTime) > new Date(latest.endTime) ? current : latest
+                );
+                vacantStartTime = new Date(lastTask.endTime);
+            } else {
+                vacantStartTime = getShiftStartDateTime(shift);
+            }
+
+            const vacantEndTime = addMinutes(vacantStartTime, shift.remainingCapacity);
+            
+            const vacantData = {
+                type: 'vacant',
+                yAxisLabel: `Vacant (${shiftLabelMap.get(shift.id)})`,
+                timeRange: [vacantStartTime.getTime(), vacantEndTime.getTime()],
+                fill: '#16a34a', // green-600 for better visibility
+                task: { // Fake task object for tooltip
+                    jobCardNumber: 'Vacant Time',
+                    itemCode: '',
+                    scheduledQuantity: 0,
+                    timeTaken: shift.remainingCapacity,
+                    startTime: vacantStartTime.toISOString(),
+                    endTime: vacantEndTime.toISOString(),
+                    shiftId: shift.id,
+                },
+                shiftLabel: shiftLabelMap.get(shift.id) || shift.id,
+            };
+            chartDataItems.push(vacantData);
+        }
+    });
+    
+    chartDataItems.sort((a, b) => {
+        if (a.timeRange[0] !== b.timeRange[0]) {
+            return a.timeRange[0] - b.timeRange[0];
+        }
+        return new Date(a.task.endTime).getTime() - new Date(b.task.endTime).getTime();
+    });
+    
+    const yAxisDomain = chartDataItems.map(d => d.yAxisLabel);
+
+    return { chartData: chartDataItems, yAxisDomain };
   }, [selectedPress, scheduleByPress, shiftsByPress, dieColors]);
 
   const timeTickFormatter = (timestamp: number) => format(new Date(timestamp), 'dd-MMM HH:mm');
