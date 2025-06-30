@@ -57,7 +57,6 @@ export const EditScheduledTaskDialog: React.FC<EditScheduledTaskDialogProps> = (
     return originalTaskFromList.remainingQuantity + task.scheduledQuantity;
   }, [originalTaskFromList, task]);
 
-  // Derived state for available options
   const dieOptions = useMemo(() => {
     if (!task) return [];
     return [...new Set(productionConditions
@@ -125,14 +124,33 @@ export const EditScheduledTaskDialog: React.FC<EditScheduledTaskDialogProps> = (
       } else {
         setEditedOperation('');
       }
+    } else if (!open) {
+      // Reset state when dialog closes
+      setEditedDieNo('');
+      setEditedMaterial('');
+      setEditedOperation('');
     }
   }, [task, open, productionConditions]);
 
-  // Reset material/operation when die changes
-  useEffect(() => { if (open) { setEditedMaterial(''); setEditedOperation(''); } }, [editedDieNo, open]);
-  // Reset operation when material changes
-  useEffect(() => { if (open) setEditedOperation(''); }, [editedMaterial, open]);
 
+  // Auto-selection effects
+  useEffect(() => {
+    if (open && step === 'details' && dieOptions.length === 1) {
+      setEditedDieNo(dieOptions[0]);
+    }
+  }, [open, step, dieOptions]);
+
+  useEffect(() => {
+    if (open && step === 'details' && editedDieNo && materialOptions.length === 1) {
+      setEditedMaterial(materialOptions[0]);
+    }
+  }, [open, step, editedDieNo, materialOptions]);
+
+  useEffect(() => {
+    if (open && step === 'details' && editedMaterial && operationOptions.length === 1) {
+      setEditedOperation(operationOptions[0].value);
+    }
+  }, [open, step, editedMaterial, operationOptions]);
 
   const handleContinue = () => {
     if (!editedDieNo || !editedMaterial || !editedOperation) {
@@ -196,14 +214,21 @@ export const EditScheduledTaskDialog: React.FC<EditScheduledTaskDialogProps> = (
       <div className="grid gap-4 py-4">
         <div className="grid grid-cols-4 items-center gap-4">
           <Label htmlFor="dieNo" className="text-right">Die No.</Label>
-          <Select value={editedDieNo} onValueChange={setEditedDieNo}>
+          <Select value={editedDieNo} onValueChange={(value) => {
+              setEditedDieNo(value);
+              setEditedMaterial('');
+              setEditedOperation('');
+          }}>
             <SelectTrigger id="dieNo" className="col-span-3"><SelectValue placeholder="Select a die..." /></SelectTrigger>
             <SelectContent>{dieOptions.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
           </Select>
         </div>
         <div className="grid grid-cols-4 items-center gap-4">
           <Label htmlFor="material" className="text-right">Material</Label>
-          <Select value={editedMaterial} onValueChange={setEditedMaterial} disabled={!editedDieNo}>
+          <Select value={editedMaterial} onValueChange={(value) => {
+              setEditedMaterial(value);
+              setEditedOperation('');
+          }} disabled={!editedDieNo}>
             <SelectTrigger id="material" className="col-span-3"><SelectValue placeholder="Select a material..." /></SelectTrigger>
             <SelectContent>{materialOptions.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
           </Select>

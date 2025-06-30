@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -44,22 +44,18 @@ const dayIndexMap: Record<string, 0 | 1 | 2 | 3 | 4 | 5 | 6> = {
   Saturday: 6,
 };
 
-// Helper function to get the absolute start date and time of a shift
 const getShiftStartDateTime = (shift: Shift): Date => {
   const now = new Date();
-  // We'll calculate dates based on the upcoming week, starting from the nearest Monday.
   const thisMonday = startOfWeek(now, { weekStartsOn: 1 });
   const targetDayIndex = dayIndexMap[shift.day];
   
-  // Find the next occurrence of the target day.
   let shiftDate = nextDay(thisMonday, targetDayIndex);
 
-  // If the calculated day is in the past relative to 'now' and it's not today, move to the next week.
   if (shiftDate < now && format(shiftDate, 'yyyy-MM-dd') !== format(now, 'yyyy-MM-dd')) {
-    shiftDate = nextDay(addMinutes(thisMonday, 10080), targetDayIndex); // 10080 minutes in a week
+    shiftDate = nextDay(addMinutes(thisMonday, 10080), targetDayIndex);
   }
 
-  const hours = shift.type === 'Day' ? 8 : 20; // Day shift starts at 8 AM, Night shift at 8 PM
+  const hours = shift.type === 'Day' ? 8 : 20;
   return setSeconds(setMinutes(setHours(shiftDate, hours), 0), 0);
 };
 
@@ -84,6 +80,7 @@ export const ValidationDialog: React.FC<ValidationDialogProps> = ({ request, pro
   const [maxPossibleQty, setMaxPossibleQty] = useState(0);
   
   const [multiShiftPlan, setMultiShiftPlan] = useState<Omit<ScheduledTask, 'id'>[] | null>(null);
+  const [isAutoValidating, setIsAutoValidating] = useState(false);
 
   const dieOptions = React.useMemo(() => {
     if (!pressNo) return [];
@@ -99,13 +96,12 @@ export const ValidationDialog: React.FC<ValidationDialogProps> = ({ request, pro
   }, [productionConditions, task.itemCode, task.material, pressNo]);
 
   useEffect(() => {
-    // Auto-select die if only one option is available
-    if (dieOptions.length === 1) {
-        setDieNo(dieOptions[0]);
-    } else {
-        setDieNo('');
+    if (dieOptions.length === 1 && !dieNo) {
+      setDieNo(dieOptions[0]);
+      setIsAutoValidating(true);
     }
-  }, [dieOptions]);
+  }, [dieOptions, dieNo]);
+
   
   useEffect(() => {
     setValidationResult(null);
@@ -116,7 +112,7 @@ export const ValidationDialog: React.FC<ValidationDialogProps> = ({ request, pro
     }
   }, [dieNo]);
 
-  const handleValidate = async (e: React.FormEvent) => {
+  const handleValidate = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setValidationResult(null);
@@ -165,7 +161,39 @@ export const ValidationDialog: React.FC<ValidationDialogProps> = ({ request, pro
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [dieNo, otherDieNo, pressNo, task.itemCode, task.material, productionConditions, toast]);
+
+  useEffect(() => {
+    if (isAutoValidating && step === 'details' && !isLoading) {
+        handleValidate({ preventDefault: () => {} } as React.FormEvent);
+        setIsAutoValidating(false);
+    }
+  }, [isAutoValidating, step, isLoading, handleValidate]);
+
+  useEffect(() => {
+    if (step === 'select_operation' && selectedCondition) {
+        const operationOptions = [];
+        if (selectedCondition.piecesPerCycle1 > 0) operationOptions.push({ value: '1' });
+        if (selectedCondition.piecesPerCycle2 > 0) operationOptions.push({ value: '2' });
+
+        if (operationOptions.length === 1) {
+            const opType = operationOptions[0].value;
+            setOperationType(opType);
+            
+            const pcsPerCycle = opType === '1' ? selectedCondition.piecesPerCycle1 : selectedCondition.piecesPerCycle2;
+            if (pcsPerCycle > 0 && selectedCondition.cureTime > 0) {
+                setPiecesPerCycle(pcsPerCycle);
+                const qty = task.remainingQuantity;
+                setMaxPossibleQty(qty);
+                setScheduledQuantity(String(qty));
+                setStep('confirm');
+            } else {
+                 toast({ title: "Invalid Data", description: "Cannot schedule with zero pieces per cycle or cure time.", variant: "destructive" });
+                 setStep('details');
+            }
+        }
+    }
+  }, [step, selectedCondition, task.remainingQuantity, toast]);
 
   const handleContinueToConfirm = () => {
     if (!selectedCondition || !operationType) {
@@ -477,7 +505,7 @@ export const ValidationDialog: React.FC<ValidationDialogProps> = ({ request, pro
               <div className="grid grid-cols-4 items-start gap-4">
                 <Label htmlFor="dieNo" className="text-right pt-2">Die No.</Label>
                 <div className="col-span-3">
-                  <Select value={dieNo} onValueChange={setDieNo} disabled={dieOptions.length === 1}>
+                  <Select value={dieNo} onValueChange={setDieNo}>
                     <SelectTrigger id="dieNo"><SelectValue placeholder="Select a die..." /></SelectTrigger>
                     <SelectContent>
                       {dieOptions.map(option => <SelectItem key={option} value={option}>{option}</SelectItem>)}
