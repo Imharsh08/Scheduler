@@ -49,3 +49,19 @@ If you prefer to start the server manually:
 2.  **View Your App**: Open your web browser and go to the address shown in the terminal, which is usually `http://localhost:9002`.
 
 Your application is now running locally! Any changes you save to the code will automatically be reflected in your browser.
+
+## Downloading Your Project
+
+You can download a `.zip` file of your entire project to your local computer. While there is usually a "Download Code" button in the top toolbar, you can also use the built-in Firebase Terminal.
+
+### Step-by-Step Guide
+
+1.  **Open the Terminal**: At the bottom of the Firebase Studio interface, you should see a "Terminal" tab. Click on it to open the command-line interface.
+
+2.  **Run the Export Command**: In the terminal, type the following command and press Enter:
+    ```bash
+    firebase studio:export --zip prosched-app.zip
+    ```
+    This command tells Studio to package your entire project into a single zip file named `prosched-app.zip`.
+
+3.  **Locate and Download**: After the command finishes (it might take a moment), you will see the `prosched-app.zip` file appear in the file explorer panel on the left-hand side of the screen. Right-click on this file and select "Download" to save it to your computer.
