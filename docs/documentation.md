@@ -2,141 +2,110 @@
 
 ## 1. Introduction
 
-ProSched is an advanced web application designed for industrial production scheduling, specifically for press-based manufacturing. It provides a highly interactive and intelligent interface for managers to load unscheduled jobs, assign them to specific presses and shifts, and optimize the production timeline. The application is built with a modern web stack and integrates with Google Sheets for data input and output, and it uses AI for process validation.
+ProSched is an advanced web application designed for industrial production scheduling, specifically for press-based manufacturing. It provides a highly interactive and intelligent interface for managers to load unscheduled jobs, assign them to specific presses and shifts, and optimize the production timeline. This document details the application's appearance, user workflow, and underlying technical architecture.
 
 ---
 
-## 2. Core Features
+## 2. The Main Interface: A Visual Tour
 
-- **Task Management**: Load unscheduled tasks directly from a Google Sheet. Tasks have properties like priority, quantity, and delivery dates.
-- **Press Workload Visualization**: See an at-a-glance overview of the total workload (pending vs. scheduled) for each press.
-- **Interactive Scheduling**:
-    - **Drag & Drop**: Drag tasks from the unscheduled list directly onto a shift slot. Also, move already scheduled tasks between shifts.
-    - **Click-to-Schedule**: Use a dropdown menu on a task card to quickly assign it to a specific shift.
-- **AI-Powered Validation**: Before a task is scheduled, the system validates if the chosen Press and Die combination is valid for the task's item and material, preventing impossible production runs.
-- **Ideal Schedule Generation**: For any given press, click a button to have the application automatically generate an optimized schedule based on task priority and delivery dates.
-- **Gantt Chart View**: Visualize the schedule for a selected press in a Gantt chart format, showing task timelines and vacant periods.
-- **Data Integration**:
-    - Load all necessary data (Tasks, Production Conditions) from different Google Sheets using a centralized configuration.
-    - Save the final, completed schedule back to a Google Sheet.
-- **Customization**:
-    - **Die Colors**: Assign unique colors to different dies for easy visual identification on the schedule grid.
-    - **Schedule Horizon**: Switch between a full monthly view (navigable by week) and a focused weekly view.
-    - **Holidays**: Define non-working days that are excluded from the schedule.
-- **Reporting**:
-    - **View All Tasks**: See a master list of every scheduled task across all presses.
-    - **PDF Download**: Generate and download a PDF summary of the schedule for all presses or a single press.
+Upon launching ProSched, the user is presented with a clean, organized, and data-rich interface divided into four main sections:
+
+1.  **Header**: The top bar containing the application title, primary actions like saving the schedule, and a menu for settings and other features.
+2.  **Press Workload Panel**: A horizontally-scrolling overview of each press, its current workload, and an option to auto-generate an ideal schedule.
+3.  **Unscheduled Tasks Panel**: A vertical list on the left, displaying all jobs waiting to be scheduled.
+4.  **Schedule Grid**: The main canvas on the right, representing the weekly or monthly timeline where tasks are placed.
+
+The overall appearance is modern and professional, utilizing a clear font hierarchy (`Space Grotesk` for headlines, `Inter` for body text) and a consistent color scheme defined in `globals.css`. The use of `Card` components from ShadCN UI gives the interface a structured, modular feel with rounded corners and subtle shadows.
 
 ---
 
-## 3. Component Breakdown
+## 3. Core Workflow: Scheduling a Job from Start to Finish
 
-The application is built with React and Next.js. Here are the key components in `src/components/`:
+This section follows the typical user journey for scheduling a production task.
 
-- **`page.tsx`**: The main application component. It holds and manages all the primary state for the application (tasks, schedules, shifts, etc.) and passes data and functions down to child components. It's the central hub for all application logic.
-- **`Header.tsx`**: The top navigation bar. It contains primary actions like "Save Schedule," "Download PDF," and a menu for accessing settings, integrations, and view modes.
-- **`PressWorkloadPanel.tsx`**: Displays a horizontally scrolling list of `PressWorkloadCard` components. It calculates the workload for each press and allows the user to select a press, which filters the rest of the UI.
-- **`TaskList.tsx`**: The panel that displays the list of `TaskCard` components for unscheduled jobs. It includes functionality to load tasks from the Google Sheet and sorts them by priority and delivery date.
-- **`ScheduleGrid.tsx`**: The main scheduling area. It displays a 7-day week, with columns for each day containing `ShiftSlot` components. This is the drop target for scheduling tasks.
-- **`ShiftSlot.tsx`**: Represents a single shift (e.g., Monday Day). It displays its capacity, progress, and a list of `ScheduledTaskCard`s that have been assigned to it.
-- **`ScheduledTaskCard.tsx`**: A compact card representing a task that has been placed on the schedule. It shows key details and is color-coded by its die number. It includes buttons to edit or remove the task and is draggable to other shifts.
-- **`TaskCard.tsx`**: A card representing an unscheduled task in the `TaskList`. It displays all job details and provides the drag handle and the click-to-schedule menu.
-- **`ValidationDialog.tsx`**: A multi-step modal that appears when a user tries to schedule a task. It handles die selection, operation type selection, quantity adjustment, and both single-shift and multi-shift planning.
-- **`GanttChartView.tsx`**: An alternative view to the `ScheduleGrid`. It uses the `recharts` library to display a Gantt chart for the selected press, including bars for vacant time.
-- **Dialogs**: A suite of modals for specific functions:
-    - `IntegrationDialog.tsx`: Manages the Google Sheet URLs.
-    - `ColorSettingsDialog.tsx`: Allows users to assign colors to dies.
-    - `ProductionConditionsDialog.tsx`: A read-only view of all loaded manufacturing conditions.
-    - `AllScheduledTasksDialog.tsx`: A master table view of all scheduled jobs.
-    - `EditScheduledTaskDialog.tsx`: A modal for adjusting the quantity of an already-scheduled task.
-    - `ScheduleSettingsDialog.tsx`: Manages schedule horizon (weekly/monthly) and holidays.
+### Step 1: Loading Initial Data
 
----
+Before scheduling can begin, the necessary data must be loaded from Google Sheets.
 
-## 4. Key Logic and Algorithms
+1.  **Open Integrations**: Click the **Menu** icon in the header and select **Integrations**.
+2.  **Provide Config URL**: In the dialog, paste the single Google Apps Script "Configuration URL". This URL points to a special script that provides the links to your other data sheets.
+3.  **Load Links & Data**: Click **Load**. The application will fetch the URLs for tasks and production conditions and then automatically load all the data, showing toast notifications for success or failure. This proxy-based approach (using Next.js API routes) bypasses browser security restrictions.
 
-### State Management (`page.tsx`)
+### Step 2: Understanding the View
 
-The application uses React's `useState` hook for all state management. There is no external state management library like Redux. The key state variables are:
+With data loaded, the panels populate with information.
 
-- `tasks`: An array of unscheduled `Task` objects.
-- `scheduleByPress`: A record where keys are press numbers and values are `Schedule` objects. This is the master data structure for all scheduled items.
-- `shiftsByPress`: A record where keys are press numbers and values are an array of `Shift` objects for the week/month. This tracks shift capacity.
-- `productionConditions`: An array of all possible manufacturing combinations (item, press, die, etc.).
-- `selectedPress`: The currently active press number, used to filter the UI.
+-   **Press Workload Panel**: Each press gets a `PressWorkloadCard`.
+    -   **Appearance**: Shows the press number, pending vs. in-process quantities, and a progress bar indicating how much of the total work for that press is scheduled.
+    -   **Interaction**: Clicking a card selects that press, filtering the **Unscheduled Tasks** list to show only compatible jobs and displaying the press's schedule in the **Schedule Grid**. The selected card is highlighted with a primary color border.
+-   **Unscheduled Tasks Panel**: Each unscheduled job is a draggable `TaskCard`.
+    -   **Appearance**: Displays the Job Card number, item code, quantity, and material. Badges clearly indicate priority (`High` is red, `Normal` is blue, etc.) and available die numbers for that job. It also shows the delivery date and how long the task has been waiting.
+    -   **Interaction**: The primary interaction is dragging these cards onto the **Schedule Grid**. A "Schedule" button with a dropdown is also available for click-based scheduling.
 
-All state updates follow immutable patterns (e.g., using `...spread` syntax or creating new objects/arrays) to ensure React's change detection works correctly and prevents stale state bugs.
+### Step 3: Placing a Task on the Schedule
 
-### Scheduling Logic (`ValidationDialog.tsx` and `page.tsx`)
+This is the core drag-and-drop interaction.
 
-1.  **Initiation**: A user drags a task or uses the "Schedule" menu. This triggers the `ValidationDialog` to open with the `ValidationRequest` object.
-2.  **Validation**:
-    - The user selects a die number for the job.
-    - The `validatePressDieCombination` AI flow is called. This flow checks if a matching entry exists in the `productionConditions` array for the given item, material, press, and die.
-    - If valid, the dialog proceeds. If not, an error is shown.
-3.  **Operation & Quantity**:
-    - The user selects the operation type (One Side vs. Two Side). This determines the `piecesPerCycle`.
-    - The user confirms or adjusts the quantity to schedule.
-4.  **Time Calculation**: The dialog calculates the total `timeTaken` based on: `Math.ceil(quantity / piecesPerCycle) * cureTime`.
-5.  **Confirmation & State Update**:
-    - **Single Shift**: If the `timeTaken` fits in the target shift's `remainingCapacity`, a single `ScheduledTask` object is created. The `onSuccess` callback is called, and `page.tsx` updates the `scheduleByPress`, `shiftsByPress`, and `tasks` states.
-    - **Multi-Shift**: If it doesn't fit, the user can opt to schedule across multiple shifts. The logic then iterates through subsequent available shifts, filling them one by one until the total quantity is scheduled. A confirmation table is shown before the final state update.
+1.  **Drag**: Click and drag a `TaskCard` from the list.
+2.  **Drop**: Drop the card onto a `ShiftSlot` (e.g., "Monday Day") in the **Schedule Grid**. The slot will highlight to indicate it's a valid drop target.
+3.  **Validation Dialog Appears**: This multi-step modal guides the user through the final scheduling details.
+    -   **Die Selection**: The user selects a valid die for the job from a dropdown. If only one is possible, it's auto-selected. The application then performs a validation check.
+    -   **Operation Selection**: If valid, the user selects the operation type (e.g., "One Side" or "Two Side"). The pieces-per-cycle for each option are clearly displayed.
+    -   **Quantity & Confirmation**: The user confirms the quantity to schedule. The dialog shows a detailed calculation of the required time.
+4.  **Task Appears on Grid**: Upon confirmation, a new `ScheduledTaskCard` appears in the target shift.
+    -   **Appearance**: This card is more compact. It's color-coded based on the die number used (customizable in **Die Color Settings**). It displays the job number, quantity, material, and the calculated start/end times.
+    -   **Shift Updates**: The progress bar and remaining time in the `ShiftSlot` update instantly.
 
-### Ideal Schedule Generation (`/lib/scheduler.ts`)
+### Step 4: Adjusting the Schedule
 
-The `generateIdealSchedule` function is the core of the automated scheduling feature.
+-   **Moving Tasks**: A `ScheduledTaskCard` can be dragged from one shift and dropped onto another. The system validates if the new shift has enough capacity. If valid, the task moves, and the start/end times for all tasks in both the source and destination shifts are automatically recalculated to keep the schedule compact.
+-   **Editing Tasks**: Hovering over a scheduled task reveals a pencil icon. Clicking it opens a dialog to adjust the scheduled quantity or other parameters.
+-   **Removing Tasks**: A cross icon also appears on hover. Clicking it brings up a confirmation dialog to prevent accidental removal. If confirmed, the task is removed from the schedule, and its quantity is returned to the unscheduled task list.
 
-1.  **Gather & Sort Tasks**: It takes all tasks that can be run on the selected press and sorts them. The primary sort key is `priority` ('High' > 'Normal' > 'Low'), and the secondary key is `deliveryDate` (earlier dates first).
-2.  **Find Best Condition**: For each task, it finds the most efficient `ProductionCondition` (the one with the highest `piecesPerCycle`).
-3.  **Greedy Algorithm**: It iterates through the sorted tasks. For each task, it iterates through the available shifts in chronological order.
-4.  **Fill Shifts**: It fills each shift with as much of the current task as possible, creating `ScheduledTask` objects for each placement. If a task is too large for one shift, it continues placing the remaining quantity in the next available shift.
-5.  **Return Result**: The function returns a `newSchedule` object for the press, the updated `newShifts` array with correct remaining capacities, and the list of `remainingTasks` that couldn't be scheduled.
+### Step 5: Handling Large Jobs (Multi-Shift Scheduling)
+
+If a user tries to schedule a quantity that requires more time than is available in a single shift:
+1.  The "Confirm" button in the validation dialog changes to **"Schedule Across Multiple Shifts"**.
+2.  Clicking this opens a new view showing a proposed plan, breaking the job down into smaller chunks across consecutive available shifts.
+3.  The user can review this plan and confirm, at which point the application populates the schedule grid with all the planned chunks.
 
 ---
 
-## 5. Styling and CSS
+## 4. Advanced Views and Features
 
-- **Tailwind CSS**: The project uses Tailwind CSS for all styling. It's a utility-first framework that allows for rapid UI development by composing utility classes (e.g., `p-4`, `flex`, `text-lg`).
-- **ShadCN UI**: The UI components (`Button`, `Card`, `Dialog`, etc.) are from the ShadCN UI library. These are not traditional library components but rather pre-built recipes of code using Tailwind CSS that are added directly to the project, making them fully customizable.
-- **CSS Variables (Theming)**: The color scheme is defined in `src/app/globals.css`. It uses HSL CSS variables for easy theming. For example, `--primary` and `--background` are defined for both light and dark mode. This allows the entire application's color scheme to be changed by modifying a few lines in this file.
-- **Custom Fonts**: The `Inter` (body) and `Space Grotesk` (headline) fonts are imported from Google Fonts in `src/app/layout.tsx`. They are configured in `tailwind.config.ts` and applied throughout the app using the `font-body` and `font-headline` utility classes.
-- **`cn` Utility (`/lib/utils.ts`)**: This is a helper function that combines `clsx` and `tailwind-merge`. It is used everywhere to conditionally apply Tailwind classes, making the component code cleaner and preventing CSS class conflicts.
-
----
-
-## 6. Data Integration (Google Apps Script)
-
-The application does not connect to Google Sheets directly from the user's browser due to security (CORS) policies. Instead, it uses a proxy-based approach.
-
-1.  **Google Apps Scripts (`/docs/*.js`)**:
-    - **`get-urls-apps-script.js`**: A script deployed as a web app that reads a central "Web Url" sheet. This sheet contains the URLs for the other two scripts. This allows the user to configure the entire application with a single URL.
-    - **`google-apps-script.js`**: Fetches the list of unscheduled tasks from the "FMS 2" sheet. It also contains the `doPost` function to save the final schedule back to the "Molding Sheet".
-    - **`production-conditions-apps-script.js`**: Fetches the manufacturing data from the "Manufacturing details" sheet.
-2.  **Next.js API Routes (Proxy)**:
-    - `src/app/api/tasks/route.ts`: This is a server-side route in the Next.js app. The front-end sends it a Google Apps Script URL. This route then fetches the data from Google on the server and forwards the JSON response back to the front-end, bypassing browser CORS restrictions.
-    - `src/app/api/schedule/route.ts`: Similarly, this route receives the final schedule and the "Save" URL from the front-end, then makes the `POST` request to the Google Apps Script to save the data.
+-   **Ideal Schedule Generation**: On each `PressWorkloadCard`, a "Ideal Schedule" button (`<Zap>` icon) allows the user to automatically generate an optimized schedule for that press. The underlying algorithm (`/lib/scheduler.ts`) sorts all compatible tasks by priority and delivery date and then fills the shifts chronologically with the most efficient production conditions.
+-   **Gantt Chart View**: Accessible from the header menu, this view transforms the schedule grid into a horizontal bar chart. Each bar represents a task or a block of vacant time, providing a clear visual timeline of production for the selected press. Task bars are color-coded by die number.
+-   **View All Tasks**: A dialog that shows a master table of every single task scheduled across all presses, sorted by press and time. This is useful for a high-level overview.
+-   **PDF Download**: Users can download a PDF summary of the schedule for a single press or all presses. The PDF is a clean, tabular report of the data from the "View All Tasks" dialog.
 
 ---
 
-## 7. AI Integration
+## 5. Visual Design, Styling, and CSS
 
-The AI functionality is implemented using **Genkit**, Google's framework for building AI-powered applications.
+The application's professional appearance is achieved through a combination of Tailwind CSS and ShadCN UI.
 
-- **`src/ai/flows/validate-press-die-combination.ts`**:
-    - This file defines a Genkit "flow," which is a server-side function that can incorporate AI models.
-    - The `validatePressDieCombinationFlow` is the core function.
-    - **Current Logic**: For performance and reliability, this flow performs a simple and deterministic check: it parses the `productionConditions` JSON string and uses the JavaScript `some()` method to see if a condition exists that matches the `itemCode`, `pressNo`, `dieNo`, and `material`.
-    - **Structure**: Although the logic is simple JavaScript, it is structured as a Genkit flow. This provides a robust framework that could easily be enhanced in the future to use an LLM for more complex, fuzzy, or "best-guess" validations if needed, without changing the calling code in the front-end.
+-   **Component Library (ShadCN UI)**: Core UI elements like `Button`, `Card`, `Dialog`, `Input`, etc., are from ShadCN UI. These are not just imported components but pre-built, fully customizable code recipes that live inside the `src/components/ui/` directory, ensuring a consistent look and feel.
+-   **Utility-First Styling (Tailwind CSS)**: All custom styling is done by applying Tailwind's utility classes (e.g., `p-4`, `flex`, `text-lg`). This allows for rapid development without writing custom CSS files.
+-   **Theming and Colors**: The entire color scheme is controlled by CSS variables in `src/app/globals.css`. Variables like `--primary`, `--secondary`, and `--background` are defined for both light and dark modes using HSL values. This makes it trivial to change the application's theme by editing a few lines in one file.
+-   **Typography**: The app uses two custom fonts from Google Fonts: `Inter` for body text and `Space Grotesk` for headlines. These are configured in `tailwind.config.ts` and applied globally.
+-   **`cn` Utility**: A helper function in `src/lib/utils.ts` merges `clsx` and `tailwind-merge`. It is used extensively to conditionally apply Tailwind classes, making component code cleaner and preventing style conflicts.
 
 ---
 
-## 8. Accessibility (a11y)
+## 6. Accessibility (a11y)
 
-Accessibility is a core consideration to ensure the application is usable by the widest possible audience, including those who rely on assistive technologies.
+Accessibility is a key consideration to ensure the app is usable for everyone.
+-   **Semantic HTML**: Using elements like `<header>`, `<main>`, `<button>`, and `<table>` provides inherent meaning for screen readers.
+-   **Keyboard Navigation**: All interactive elements are focusable and operable via the keyboard, including dialogs and dropdowns. This is largely provided by the accessible Radix UI primitives that ShadCN components are built on.
+-   **Focus Management**: Dialogs properly trap keyboard focus, and when closed, focus is returned to the element that opened them.
+-   **ARIA Attributes**: `aria-label` is used for icon-only buttons to provide text descriptions for assistive technologies.
+-   **Color Contrast**: The default color theme is designed to meet WCAG AA contrast standards.
 
-- **Semantic HTML**: The application uses semantic HTML5 elements like `<header>`, `<main>`, `<button>`, and `<table>` to provide inherent meaning and structure, which is crucial for screen readers.
-- **Keyboard Navigation**: All interactive elements, including buttons, dropdown menus, dialogs, and schedule items, are focusable and operable via the keyboard. This is largely provided out-of-the-box by the ShadCN UI components, which are built on accessible Radix UI primitives.
-- **ARIA Attributes**: Where necessary, ARIA (Accessible Rich Internet Applications) attributes are used to enhance accessibility. For example, `aria-label` is used on icon-only buttons to provide a text description for screen readers.
-- **Focus Management**: Dialogs (modals) properly trap focus within them, so keyboard users cannot accidentally navigate to elements underneath the modal. When a dialog is closed, focus is returned to the element that triggered it.
-- **Color Contrast**: The color palette defined in `globals.css` is designed to meet WCAG AA contrast ratio standards for text and UI elements, ensuring readability for users with low vision.
-- **Screen Reader Support**: Elements are structured logically. For example, `CardTitle` and `CardDescription` provide context for the data within each card, and table headers (`<th>`) are correctly associated with their data cells (`<td>`).
+---
+
+## 7. Technical Architecture Overview
+
+-   **Framework**: Next.js with the App Router and TypeScript.
+-   **State Management**: Relies solely on React's built-in `useState` and `useEffect` hooks. State is managed centrally in `page.tsx` and passed down as props. All state updates follow immutable patterns to ensure predictable re-renders.
+-   **Data Integration**: Uses a proxy pattern for fetching data from Google Sheets. The frontend calls a Next.js API route (`/api/tasks`), which in turn calls the Google Apps Script URL on the server. This avoids browser CORS issues.
+-   **AI Validation**: Uses **Genkit** for its AI flow structure, even though the current validation logic is a simple JavaScript check for performance and reliability. The flow (`/ai/flows/validate-press-die-combination.ts`) is designed to be easily upgradable to use a true LLM in the future without changing the frontend code.
