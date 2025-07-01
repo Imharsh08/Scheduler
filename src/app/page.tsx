@@ -314,7 +314,14 @@ export default function Home() {
 
     } catch (error) {
       console.error("Failed to load tasks:", error);
-      const description = error instanceof Error ? error.message : "Could not fetch tasks. Check the URL and try again.";
+      let description = "Could not fetch tasks. Check the URL and try again.";
+      if (error instanceof Error) {
+          if (error.message.toLowerCase().includes("unexpected token")) {
+              description = "Received an invalid response from the server. This can happen if the Google Sheet URL is incorrect or requires a login. Please verify your Integration settings and ensure the Google Apps Script is deployed to be accessible by 'Anyone'.";
+          } else {
+              description = error.message;
+          }
+      }
       toast({
         title: "Error Loading Tasks",
         description: description,
@@ -369,7 +376,14 @@ export default function Home() {
 
     } catch (error) {
       console.error("Failed to load production conditions:", error);
-      const description = error instanceof Error ? error.message : "Could not fetch conditions. Check the URL and try again.";
+      let description = "Could not fetch conditions. Check the URL and try again.";
+      if (error instanceof Error) {
+          if (error.message.toLowerCase().includes("unexpected token")) {
+              description = "Received an invalid response from the server. This can happen if the Google Sheet URL is incorrect or requires a login. Please verify your Integration settings and ensure the Google Apps Script is deployed to be accessible by 'Anyone'.";
+          } else {
+              description = error.message;
+          }
+      }
       toast({
         title: "Error Loading Conditions",
         description: description,
@@ -432,7 +446,14 @@ export default function Home() {
 
     } catch (error) {
       console.error("Failed to load URLs from sheet:", error);
-      const description = error instanceof Error ? error.message : "Could not fetch configuration. Check the URL and try again.";
+      let description = "Could not fetch configuration. Check the URL and try again.";
+      if (error instanceof Error) {
+          if (error.message.toLowerCase().includes("unexpected token")) {
+              description = "Received an invalid response from the server. This can happen if the Google Sheet URL is incorrect or requires a login. Please verify your Integration settings and ensure the Google Apps Script is deployed to be accessible by 'Anyone'.";
+          } else {
+              description = error.message;
+          }
+      }
       toast({
         title: "Error Loading Configuration",
         description: description,
