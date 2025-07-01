@@ -13,9 +13,10 @@ interface ShiftSlotProps {
   dieColors: Record<number, string>;
   onRemoveRequest: (task: ScheduledTask) => void;
   onEditRequest: (task: ScheduledTask) => void;
+  onTaskDragStart: (e: React.DragEvent, task: ScheduledTask) => void;
 }
 
-export const ShiftSlot: React.FC<ShiftSlotProps> = ({ shift, scheduledTasks, onDrop, dieColors, onRemoveRequest, onEditRequest }) => {
+export const ShiftSlot: React.FC<ShiftSlotProps> = ({ shift, scheduledTasks, onDrop, dieColors, onRemoveRequest, onEditRequest, onTaskDragStart }) => {
   const [isOver, setIsOver] = useState(false);
 
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
@@ -80,6 +81,7 @@ export const ShiftSlot: React.FC<ShiftSlotProps> = ({ shift, scheduledTasks, onD
                     dieColors={dieColors} 
                     onRemoveRequest={onRemoveRequest}
                     onEditRequest={onEditRequest}
+                    onDragStart={onTaskDragStart}
                   />
                 ))}
             </div>

@@ -15,9 +15,10 @@ interface ScheduleGridProps {
   selectedPress: number | null;
   onRemoveRequest: (task: ScheduledTask) => void;
   onEditRequest: (task: ScheduledTask) => void;
+  onTaskDragStart: (e: React.DragEvent, task: ScheduledTask) => void;
 }
 
-export const ScheduleGrid: React.FC<ScheduleGridProps> = ({ shifts, schedule, onDrop, dieColors, selectedPress, onRemoveRequest, onEditRequest }) => {
+export const ScheduleGrid: React.FC<ScheduleGridProps> = ({ shifts, schedule, onDrop, dieColors, selectedPress, onRemoveRequest, onEditRequest, onTaskDragStart }) => {
 
   const { isMonthlyView, monthDays, weekDayPlaceholders, sortedDates, shiftsByDay } = React.useMemo(() => {
     if (shifts.length === 0) {
@@ -91,6 +92,7 @@ export const ScheduleGrid: React.FC<ScheduleGridProps> = ({ shifts, schedule, on
                                         dieColors={dieColors}
                                         onRemoveRequest={onRemoveRequest}
                                         onEditRequest={onEditRequest}
+                                        onTaskDragStart={onTaskDragStart}
                                       />
                                   ))
                               )}
@@ -117,6 +119,7 @@ export const ScheduleGrid: React.FC<ScheduleGridProps> = ({ shifts, schedule, on
                   dieColors={dieColors}
                   onRemoveRequest={onRemoveRequest}
                   onEditRequest={onEditRequest}
+                  onTaskDragStart={onTaskDragStart}
                 />
               ))}
           </div>

@@ -16,9 +16,10 @@ interface ScheduledTaskCardProps {
   dieColors: Record<number, string>;
   onRemoveRequest: (task: ScheduledTask) => void;
   onEditRequest: (task: ScheduledTask) => void;
+  onDragStart: (e: React.DragEvent, task: ScheduledTask) => void;
 }
 
-export const ScheduledTaskCard: React.FC<ScheduledTaskCardProps> = ({ task, dieColors, onRemoveRequest, onEditRequest }) => {
+export const ScheduledTaskCard: React.FC<ScheduledTaskCardProps> = ({ task, dieColors, onRemoveRequest, onEditRequest, onDragStart }) => {
   const colorClass = getDieColorClass(task.dieNo, dieColors);
 
   const formatTime = (dateString: string) => {
@@ -30,7 +31,11 @@ export const ScheduledTaskCard: React.FC<ScheduledTaskCardProps> = ({ task, dieC
   }
 
   return (
-    <Card className={cn("shadow-sm border-2 group relative", colorClass)}>
+    <Card 
+      className={cn("shadow-sm border-2 group relative cursor-grab active:cursor-grabbing", colorClass)}
+      draggable
+      onDragStart={(e) => onDragStart(e, task)}
+    >
        <div className="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
           <Button variant="ghost" size="icon" className="h-6 w-6 bg-background/70 hover:bg-background" onClick={() => onEditRequest(task)}>
               <Pencil className="h-3 w-3" />

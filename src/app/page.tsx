@@ -29,8 +29,19 @@ import {
     format, 
     isSameDay, 
     getDay,
-    parseISO
+    parseISO,
+    setHours,
+    setMinutes,
+    setSeconds,
+    addMinutes,
 } from 'date-fns';
+
+const getShiftStartDateTime = (shift: Shift): Date => {
+    const [year, month, day] = shift.date.split('-').map(Number);
+    const hours = shift.type === 'Day' ? 8 : 20;
+    // JS Date months are 0-indexed, so subtract 1 from month
+    return setSeconds(setMinutes(setHours(new Date(year, month - 1, day), hours), 0), 0);
+};
 
 export default function Home() {
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
@@ -225,11 +236,16 @@ export default function Home() {
       }
 
       const scheduledQuantities: Record<string, number> = {};
-      Object.values(scheduleByPress).flat().forEach(pressSchedule => {
-        Object.values(pressSchedule).flat().forEach(task => {
-          scheduledQuantities[task.jobCardNumber] = (scheduledQuantities[task.jobCardNumber] || 0) + task.scheduledQuantity;
-        });
-      });
+      // Use a more robust looping mechanism
+      for (const pressNo in scheduleByPress) {
+        const pressSchedule = scheduleByPress[pressNo];
+        for (const shiftId in pressSchedule) {
+          const shiftTasks = pressSchedule[shiftId];
+          for (const task of shiftTasks) {
+            scheduledQuantities[task.jobCardNumber] = (scheduledQuantities[task.jobCardNumber] || 0) + task.scheduledQuantity;
+          }
+        }
+      }
 
       const fetchedTasks: Task[] = data.map((item: any) => {
         const alreadyScheduled = scheduledQuantities[item.jobCardNumber] || 0;
@@ -471,22 +487,128 @@ export default function Home() {
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>, taskId: string) => {
     e.dataTransfer.setData('text/plain', taskId);
   };
+  
+  const handleScheduledTaskDragStart = (e: React.DragEvent<HTMLDivElement>, task: ScheduledTask) => {
+    const dragData = {
+        type: 'move_task',
+        taskJson: JSON.stringify(task),
+    };
+    e.dataTransfer.setData('application/json', JSON.stringify(dragData));
+  };
+  
+  const recalculateShiftTasks = (tasks: ScheduledTask[], shift: Shift): { updatedTasks: ScheduledTask[], totalTime: number } => {
+    const sortedTasks = [...tasks].sort((a, b) => {
+        const aDate = new Date(a.startTime);
+        const bDate = new Date(b.startTime);
+        if (aDate.getTime() !== bDate.getTime()) {
+            return aDate.getTime() - bDate.getTime();
+        }
+        return a.jobCardNumber.localeCompare(b.jobCardNumber);
+    });
+    
+    let cumulativeTime = 0;
+    const shiftStart = getShiftStartDateTime(shift);
 
-  const handleDrop = (e: React.DragEvent<HTMLDivElement>, shiftId: string) => {
+    const updatedTasks = sortedTasks.map(task => {
+        const newStartTime = addMinutes(shiftStart, cumulativeTime);
+        const newEndTime = addMinutes(newStartTime, task.timeTaken);
+        cumulativeTime += task.timeTaken;
+        return {
+            ...task,
+            startTime: newStartTime.toISOString(),
+            endTime: newEndTime.toISOString(),
+            shiftId: shift.id, // Ensure shiftId is updated
+        };
+    });
+
+    return { updatedTasks, totalTime: cumulativeTime };
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>, targetShiftId: string) => {
     e.preventDefault();
     if (selectedPress === null) {
-        toast({
-            title: "Select a Press First",
-            description: "Please select a press from the workload panel to schedule a task.",
-            variant: "destructive"
-        });
+        toast({ title: "Select a Press First", description: "Please select a press from the workload panel to schedule a task.", variant: "destructive" });
         return;
     }
+
+    const json_data = e.dataTransfer.getData('application/json');
+    
+    // --- HANDLE TASK MOVE ---
+    if (json_data) {
+        try {
+            const data = JSON.parse(json_data);
+            if (data.type === 'move_task') {
+                const movedTask: ScheduledTask = JSON.parse(data.taskJson);
+                const sourceShiftId = movedTask.shiftId;
+
+                if (sourceShiftId === targetShiftId) return; // Dropped in the same shift
+
+                const allShiftsForPress = shiftsByPress[selectedPress] || [];
+                const targetShift = allShiftsForPress.find(s => s.id === targetShiftId);
+                const sourceShift = allShiftsForPress.find(s => s.id === sourceShiftId);
+
+                if (!targetShift || !sourceShift) {
+                    toast({ title: "Error", description: "Could not find source or target shift.", variant: "destructive" });
+                    return;
+                }
+
+                if (targetShift.remainingCapacity < movedTask.timeTaken) {
+                    toast({ title: "Cannot Move Task", description: `Not enough capacity in ${targetShift.day} ${targetShift.type} shift.`, variant: "destructive" });
+                    return;
+                }
+                
+                // --- UPDATE STATE ---
+                setScheduleByPress(currentSchedule => {
+                    const newSchedule = JSON.parse(JSON.stringify(currentSchedule));
+                    const pressSchedule = newSchedule[selectedPress] || {};
+                    
+                    // 1. Get task lists
+                    let sourceTasks = pressSchedule[sourceShiftId] || [];
+                    let targetTasks = pressSchedule[targetShiftId] || [];
+
+                    // 2. Remove from source
+                    sourceTasks = sourceTasks.filter((t: ScheduledTask) => t.id !== movedTask.id);
+                    
+                    // 3. Add to target
+                    targetTasks.push(movedTask);
+                    
+                    // 4. Recalculate both shifts
+                    const { updatedTasks: updatedSourceTasks, totalTime: sourceTime } = recalculateShiftTasks(sourceTasks, sourceShift);
+                    const { updatedTasks: updatedTargetTasks, totalTime: targetTime } = recalculateShiftTasks(targetTasks, targetShift);
+                    
+                    // 5. Update schedule state
+                    pressSchedule[sourceShiftId] = updatedSourceTasks;
+                    pressSchedule[targetShiftId] = updatedTargetTasks;
+                    
+                    // 6. Update shift capacities in a separate state update to avoid race conditions
+                    setShiftsByPress(currentShifts => {
+                        const newShifts = JSON.parse(JSON.stringify(currentShifts));
+                        const pressShiftsToUpdate = newShifts[selectedPress] || [];
+                        const sourceShiftToUpdate = pressShiftsToUpdate.find((s: Shift) => s.id === sourceShiftId);
+                        const targetShiftToUpdate = pressShiftsToUpdate.find((s: Shift) => s.id === targetShiftId);
+                        
+                        if(sourceShiftToUpdate) sourceShiftToUpdate.remainingCapacity = sourceShift.capacity - sourceTime;
+                        if(targetShiftToUpdate) targetShiftToUpdate.remainingCapacity = targetShift.capacity - targetTime;
+                        
+                        return newShifts;
+                    });
+                    
+                    toast({ title: "Task Moved", description: `Task ${movedTask.jobCardNumber} moved successfully.` });
+                    return newSchedule;
+                });
+                return; // End move logic
+            }
+        } catch (error) {
+            console.error("Error parsing dragged data", error);
+        }
+    }
+    
+    // --- HANDLE NEW TASK ---
     const taskId = e.dataTransfer.getData('text/plain');
     const task = tasks.find((t) => t.jobCardNumber === taskId);
     
     const pressShifts = shiftsByPress[selectedPress] || [];
-    const shift = pressShifts.find((s) => s.id === shiftId);
+    const shift = pressShifts.find((s) => s.id === targetShiftId);
 
     if (task && shift) {
         const isTaskValidForPress = productionConditions.some(
@@ -867,6 +989,7 @@ export default function Home() {
                   selectedPress={selectedPress}
                   onRemoveRequest={handleRemoveRequest}
                   onEditRequest={handleEditRequest}
+                  onTaskDragStart={handleScheduledTaskDragStart}
                 />
               ) : (
                 <GanttChartView
