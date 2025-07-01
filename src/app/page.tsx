@@ -742,7 +742,7 @@ export default function Home() {
   const handleConfirmRemove = () => {
     if (!taskToRemove) return;
 
-    const { pressNo, shiftId, timeTaken, scheduledQuantity, jobCardNumber, itemCode, material, priority, creationDate, deliveryDate, orderedQuantity } = taskToRemove;
+    const { pressNo, shiftId, timeTaken, scheduledQuantity, jobCardNumber, creationDate, deliveryDate, itemCode, material, orderedQuantity, priority } = taskToRemove;
 
     setShiftsByPress(current => {
       const pressShifts = JSON.parse(JSON.stringify(current[pressNo] || []));
@@ -756,11 +756,18 @@ export default function Home() {
     setTasks(currentTasks => {
       const existingTaskIndex = currentTasks.findIndex(t => t.jobCardNumber === jobCardNumber);
       if (existingTaskIndex > -1) {
-        const newTasks = [...currentTasks];
-        newTasks[existingTaskIndex].remainingQuantity += scheduledQuantity;
-        return newTasks;
+        // IMMUTABLE UPDATE: Create a new array and a new object for the updated task
+        return currentTasks.map((task, index) => {
+          if (index === existingTaskIndex) {
+            return {
+              ...task,
+              remainingQuantity: task.remainingQuantity + scheduledQuantity,
+            };
+          }
+          return task;
+        });
       } else {
-        // Task was fully scheduled, so add it back to the list preserving original data
+        // Task was fully scheduled, so add it back to the list
         return [
           ...currentTasks,
           {
@@ -768,10 +775,10 @@ export default function Home() {
             itemCode,
             material,
             priority,
-            orderedQuantity: orderedQuantity,
+            orderedQuantity,
             remainingQuantity: scheduledQuantity,
-            creationDate: creationDate,
-            deliveryDate: deliveryDate,
+            creationDate,
+            deliveryDate,
           }
         ];
       }
@@ -814,16 +821,25 @@ export default function Home() {
     setTasks(currentTasks => {
         const jobCardNumber = taskToEdit.jobCardNumber;
         const existingTaskIndex = currentTasks.findIndex(t => t.jobCardNumber === jobCardNumber);
+        
+        // This logic handles returning quantity to the unscheduled list.
+        // `qtyDifference` will be negative if the quantity was reduced.
+        // `-= qtyDifference` correctly adds back the reduced amount.
+        const returnedQuantity = -qtyDifference; 
 
         if (existingTaskIndex > -1) {
-            // Task already exists in the unscheduled list, just update its quantity
-            const updatedTasks = [...currentTasks];
-            updatedTasks[existingTaskIndex].remainingQuantity -= qtyDifference;
-            return updatedTasks.filter(t => t.remainingQuantity > 0);
+            // IMMUTABLE UPDATE: Task already in the unscheduled list.
+            return currentTasks.map((task, index) => {
+              if (index === existingTaskIndex) {
+                return {
+                  ...task,
+                  remainingQuantity: task.remainingQuantity + returnedQuantity,
+                }
+              }
+              return task;
+            }).filter(t => t.remainingQuantity > 0);
         } else {
-            // Task was fully scheduled and is not in the list.
-            // We need to add it back if the quantity was reduced.
-            const returnedQuantity = -qtyDifference;
+            // Task was not in the unscheduled list. Add it back if needed.
             if (returnedQuantity > 0) {
                 const { itemCode, material, priority, creationDate, deliveryDate, orderedQuantity } = taskToEdit;
                 const newTask: Task = {
