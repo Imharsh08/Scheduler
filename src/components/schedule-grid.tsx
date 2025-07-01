@@ -60,7 +60,7 @@ export const ScheduleGrid: React.FC<ScheduleGridProps> = ({ shifts, schedule, on
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-4 min-w-max h-full">
       {sortedDates.map(date => (
         <div key={date} className="flex flex-col gap-4">
-          <h3 className="font-headline text-xl text-center font-semibold">{format(new Date(date + 'T12:00:00Z'), 'EEEE')}</h3>
+          <h3 className="font-headline text-lg text-center font-semibold">{format(new Date(date + 'T12:00:00Z'), 'EEE, d MMM')}</h3>
           <div className="flex flex-col gap-4 flex-1">
             {shiftsByDay[date].map(shift => (
                 <ShiftSlot
@@ -80,3 +80,5 @@ export const ScheduleGrid: React.FC<ScheduleGridProps> = ({ shifts, schedule, on
     </div>
   );
 };
+
+    

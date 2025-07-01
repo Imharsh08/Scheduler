@@ -42,8 +42,8 @@ import {
 const getShiftStartDateTime = (shift: Shift): Date => {
     const [year, month, day] = shift.date.split('-').map(Number);
     const hours = shift.type === 'Day' ? 8 : 20;
-    // JS Date months are 0-indexed, so subtract 1 from month
-    return setSeconds(setMinutes(setHours(new Date(year, month - 1, day), hours), 0), 0);
+    // JS Date months are 0-indexed, so subtract 1 from month. Use UTC to avoid timezone shifts.
+    return setSeconds(setMinutes(setHours(new Date(Date.UTC(year, month - 1, day)), hours), 0), 0);
 };
 
 export default function Home() {
@@ -602,35 +602,43 @@ export default function Home() {
             return;
           }
           
-          // Perform calculations first
-          const newSchedule = JSON.parse(JSON.stringify(scheduleByPress));
-          const pressSchedule = newSchedule[selectedPress] || {};
+          let newSchedule: Record<number, Schedule> | null = null;
+          let newShifts: Record<number, Shift[]> | null = null;
+
+          setScheduleByPress(current => {
+              const scheduleCopy = JSON.parse(JSON.stringify(current));
+              const pressSchedule = scheduleCopy[selectedPress!] || {};
+
+              let sourceTasks = pressSchedule[sourceShiftId] || [];
+              let targetTasks = pressSchedule[targetShiftId] || [];
+
+              sourceTasks = sourceTasks.filter((t: ScheduledTask) => t.id !== movedTask.id);
+              targetTasks.push(movedTask);
+              
+              const { updatedTasks: updatedSourceTasks, totalTime: sourceTime } = recalculateShiftTasks(sourceTasks, sourceShift);
+              const { updatedTasks: updatedTargetTasks, totalTime: targetTime } = recalculateShiftTasks(targetTasks, targetShift);
+              
+              pressSchedule[sourceShiftId] = updatedSourceTasks;
+              pressSchedule[targetShiftId] = updatedTargetTasks;
+              
+              newSchedule = scheduleCopy;
+
+              setShiftsByPress(currentShifts => {
+                  const shiftsCopy = JSON.parse(JSON.stringify(currentShifts));
+                  const pressShiftsToUpdate = shiftsCopy[selectedPress!] || [];
+                  const sourceShiftToUpdate = pressShiftsToUpdate.find((s: Shift) => s.id === sourceShiftId);
+                  const targetShiftToUpdate = pressShiftsToUpdate.find((s: Shift) => s.id === targetShiftId);
+                  
+                  if(sourceShiftToUpdate) sourceShiftToUpdate.remainingCapacity = sourceShift.capacity - sourceTime;
+                  if(targetShiftToUpdate) targetShiftToUpdate.remainingCapacity = targetShift.capacity - targetTime;
+                  
+                  newShifts = shiftsCopy;
+                  return shiftsCopy;
+              });
+
+              return scheduleCopy;
+          });
           
-          let sourceTasks = pressSchedule[sourceShiftId] || [];
-          let targetTasks = pressSchedule[targetShiftId] || [];
-  
-          sourceTasks = sourceTasks.filter((t: ScheduledTask) => t.id !== movedTask.id);
-          targetTasks.push(movedTask);
-          
-          const { updatedTasks: updatedSourceTasks, totalTime: sourceTime } = recalculateShiftTasks(sourceTasks, sourceShift);
-          const { updatedTasks: updatedTargetTasks, totalTime: targetTime } = recalculateShiftTasks(targetTasks, targetShift);
-          
-          pressSchedule[sourceShiftId] = updatedSourceTasks;
-          pressSchedule[targetShiftId] = updatedTargetTasks;
-          
-          const newShifts = JSON.parse(JSON.stringify(shiftsByPress));
-          const pressShiftsToUpdate = newShifts[selectedPress] || [];
-          const sourceShiftToUpdate = pressShiftsToUpdate.find((s: Shift) => s.id === sourceShiftId);
-          const targetShiftToUpdate = pressShiftsToUpdate.find((s: Shift) => s.id === targetShiftId);
-          
-          if(sourceShiftToUpdate) sourceShiftToUpdate.remainingCapacity = sourceShift.capacity - sourceTime;
-          if(targetShiftToUpdate) targetShiftToUpdate.remainingCapacity = targetShift.capacity - targetTime;
-  
-          // Dispatch state updates
-          setScheduleByPress(newSchedule);
-          setShiftsByPress(newShifts);
-          
-          // Call side effect (toast) after state updates
           toast({ title: "Task Moved", description: `Task ${movedTask.jobCardNumber} moved successfully.` });
   
           return;
@@ -769,7 +777,14 @@ export default function Home() {
   }, [productionConditions]);
 
   const handleDownloadPdf = (pressNo: 'all' | number) => {
-    generateSchedulePdf(pressNo, scheduleByPress, shiftsByPress);
+    generateSchedulePdf({
+        pressNo, 
+        scheduleByPress, 
+        shiftsByPress,
+        scheduleHorizon,
+        weeksInMonth,
+        currentWeek,
+    });
   }
 
   const handleRemoveRequest = (task: ScheduledTask) => {
@@ -1113,6 +1128,9 @@ export default function Home() {
         onOpenChange={setIsAllTasksDialogOpen}
         scheduleByPress={scheduleByPress}
         shiftsByPress={shiftsByPress}
+        scheduleHorizon={scheduleHorizon}
+        weeksInMonth={weeksInMonth}
+        currentWeek={currentWeek}
       />
       {taskToRemove && (
         <AlertDialog open onOpenChange={(open) => !open && setTaskToRemove(null)}>
@@ -1144,3 +1162,5 @@ export default function Home() {
     </div>
   );
 }
+
+    

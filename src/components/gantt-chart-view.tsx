@@ -7,32 +7,13 @@ import type { Schedule, ScheduledTask, Shift } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { PackageSearch } from 'lucide-react';
 import { getDieChartColor } from '@/lib/color-utils';
-import { format, startOfWeek, nextDay, setHours, setMinutes, setSeconds, addMinutes } from 'date-fns';
-
-// Helper to get the absolute start date and time of a shift
-const dayIndexMap: Record<string, 0 | 1 | 2 | 3 | 4 | 5 | 6> = {
-  Sunday: 0,
-  Monday: 1,
-  Tuesday: 2,
-  Wednesday: 3,
-  Thursday: 4,
-  Friday: 5,
-  Saturday: 6,
-};
+import { format, setHours, setMinutes, setSeconds, addMinutes } from 'date-fns';
 
 const getShiftStartDateTime = (shift: Shift): Date => {
-  const now = new Date();
-  const thisMonday = startOfWeek(now, { weekStartsOn: 1 });
-  const targetDayIndex = dayIndexMap[shift.day];
-  
-  let shiftDate = nextDay(thisMonday, targetDayIndex);
-
-  if (shiftDate < now && format(shiftDate, 'yyyy-MM-dd') !== format(now, 'yyyy-MM-dd')) {
-    shiftDate = nextDay(addMinutes(thisMonday, 10080), targetDayIndex);
-  }
-
-  const hours = shift.type === 'Day' ? 8 : 20;
-  return setSeconds(setMinutes(setHours(shiftDate, hours), 0), 0);
+    const [year, month, day] = shift.date.split('-').map(Number);
+    const hours = shift.type === 'Day' ? 8 : 20;
+    // JS Date months are 0-indexed, so subtract 1 from month. Use UTC to avoid timezone shifts.
+    return setSeconds(setMinutes(setHours(new Date(Date.UTC(year, month - 1, day)), hours), 0), 0);
 };
 
 interface GanttChartViewProps {
@@ -196,3 +177,5 @@ export const GanttChartView: React.FC<GanttChartViewProps> = ({
     </Card>
   );
 };
+
+    

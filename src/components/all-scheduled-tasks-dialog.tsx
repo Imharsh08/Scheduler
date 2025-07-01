@@ -14,38 +14,58 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import type { Schedule, Shift, Task } from '@/types';
-import { format } from 'date-fns';
+import type { Schedule, Shift, ScheduledTask } from '@/types';
+import { format, isWithinInterval } from 'date-fns';
 
 interface AllScheduledTasksDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   scheduleByPress: Record<number, Schedule>;
   shiftsByPress: Record<number, Shift[]>;
+  scheduleHorizon: 'weekly' | 'monthly';
+  weeksInMonth: { start: Date; end: Date }[];
+  currentWeek: number;
 }
 
 export const AllScheduledTasksDialog: React.FC<AllScheduledTasksDialogProps> = ({
   open,
   onOpenChange,
   scheduleByPress,
-  shiftsByPress,
+  scheduleHorizon,
+  weeksInMonth,
+  currentWeek,
 }) => {
-  const allTasks = React.useMemo(() => {
-    const flattenedTasks = Object.entries(scheduleByPress)
-      .flatMap(([pressNo, pressSchedule]) =>
-        Object.values(pressSchedule).flatMap(shiftTasks => shiftTasks)
-      );
+  const { allTasks, dialogDescription } = React.useMemo(() => {
+    let flattenedTasks = Object.values(scheduleByPress).flatMap(pressSchedule => 
+      Object.values(pressSchedule).flat()
+    );
 
-    return flattenedTasks.sort((a, b) => {
+    let description = "A master list of all scheduled jobs for the current period.";
+    
+    if (scheduleHorizon === 'monthly' && weeksInMonth.length > 0 && currentWeek < weeksInMonth.length) {
+        const interval = weeksInMonth[currentWeek];
+        flattenedTasks = flattenedTasks.filter(task => {
+            const taskDate = new Date(task.startTime);
+            return isWithinInterval(taskDate, interval);
+        });
+        description = `Showing all tasks for the week of ${format(interval.start, 'MMM d')} to ${format(interval.end, 'MMM d')}.`;
+    }
+
+    flattenedTasks.sort((a, b) => {
       if (a.pressNo !== b.pressNo) return a.pressNo - b.pressNo;
       return new Date(a.startTime).getTime() - new Date(b.startTime).getTime();
     });
-  }, [scheduleByPress]);
 
-  const getShiftInfo = (shiftId: string, pressNo: number) => {
-    const shiftsForPress = shiftsByPress[pressNo] || [];
-    const shift = shiftsForPress.find(s => s.id === shiftId);
-    return shift ? `${shift.day} ${shift.type}` : 'Unknown';
+    return { allTasks: flattenedTasks, dialogDescription: description };
+  }, [scheduleByPress, scheduleHorizon, weeksInMonth, currentWeek]);
+
+  const getShiftInfo = (shiftId: string): Shift['type'] | 'Unknown' => {
+      const parts = shiftId.split('-');
+      const type = parts[parts.length -1];
+      if (type === 'day' || type === 'night') {
+          return type.charAt(0).toUpperCase() + type.slice(1) as Shift['type'];
+      }
+      return 'Unknown';
   };
 
   return (
@@ -54,7 +74,7 @@ export const AllScheduledTasksDialog: React.FC<AllScheduledTasksDialogProps> = (
         <DialogHeader>
           <DialogTitle className="font-headline">All Scheduled Tasks</DialogTitle>
           <DialogDescription>
-            A master list of all scheduled jobs across all presses for the week.
+            {dialogDescription}
           </DialogDescription>
         </DialogHeader>
         <ScrollArea className="h-[70vh] pr-6">
@@ -62,6 +82,7 @@ export const AllScheduledTasksDialog: React.FC<AllScheduledTasksDialogProps> = (
             <TableHeader className="sticky top-0 bg-background">
               <TableRow>
                 <TableHead className="text-center">Press</TableHead>
+                <TableHead>Date</TableHead>
                 <TableHead>Shift</TableHead>
                 <TableHead>Job Card</TableHead>
                 <TableHead>Item Code</TableHead>
@@ -77,7 +98,8 @@ export const AllScheduledTasksDialog: React.FC<AllScheduledTasksDialogProps> = (
                 allTasks.map((task) => (
                   <TableRow key={task.id}>
                     <TableCell className="text-center font-medium">{task.pressNo}</TableCell>
-                    <TableCell>{getShiftInfo(task.shiftId, task.pressNo)}</TableCell>
+                    <TableCell>{format(new Date(task.startTime), 'dd MMM')}</TableCell>
+                    <TableCell>{getShiftInfo(task.shiftId)}</TableCell>
                     <TableCell>{task.jobCardNumber}</TableCell>
                     <TableCell>{task.itemCode}</TableCell>
                     <TableCell className="text-center">{task.dieNo}</TableCell>
@@ -98,8 +120,8 @@ export const AllScheduledTasksDialog: React.FC<AllScheduledTasksDialogProps> = (
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={9} className="h-24 text-center">
-                    No tasks have been scheduled yet.
+                  <TableCell colSpan={10} className="h-24 text-center">
+                    No tasks have been scheduled for this period.
                   </TableCell>
                 </TableRow>
               )}
@@ -115,3 +137,5 @@ export const AllScheduledTasksDialog: React.FC<AllScheduledTasksDialogProps> = (
     </Dialog>
   );
 };
+
+    

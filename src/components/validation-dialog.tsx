@@ -17,13 +17,10 @@ import { Separator } from '@/components/ui/separator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
-  startOfWeek,
-  nextDay,
   setHours,
   setMinutes,
   setSeconds,
   addMinutes,
-  format,
 } from 'date-fns';
 
 interface ValidationDialogProps {
@@ -34,29 +31,11 @@ interface ValidationDialogProps {
   onSuccess: (scheduledItems: Omit<ScheduledTask, 'id'>[]) => void;
 }
 
-const dayIndexMap: Record<string, 0 | 1 | 2 | 3 | 4 | 5 | 6> = {
-  Sunday: 0,
-  Monday: 1,
-  Tuesday: 2,
-  Wednesday: 3,
-  Thursday: 4,
-  Friday: 5,
-  Saturday: 6,
-};
-
 const getShiftStartDateTime = (shift: Shift): Date => {
-  const now = new Date();
-  const thisMonday = startOfWeek(now, { weekStartsOn: 1 });
-  const targetDayIndex = dayIndexMap[shift.day];
-  
-  let shiftDate = nextDay(thisMonday, targetDayIndex);
-
-  if (shiftDate < now && format(shiftDate, 'yyyy-MM-dd') !== format(now, 'yyyy-MM-dd')) {
-    shiftDate = nextDay(addMinutes(thisMonday, 10080), targetDayIndex);
-  }
-
-  const hours = shift.type === 'Day' ? 8 : 20;
-  return setSeconds(setMinutes(setHours(shiftDate, hours), 0), 0);
+    const [year, month, day] = shift.date.split('-').map(Number);
+    const hours = shift.type === 'Day' ? 8 : 20;
+    // JS Date months are 0-indexed, so subtract 1 from month. Use UTC to avoid timezone shifts.
+    return setSeconds(setMinutes(setHours(new Date(Date.UTC(year, month - 1, day)), hours), 0), 0);
 };
 
 export const ValidationDialog: React.FC<ValidationDialogProps> = ({ request, productionConditions, shifts, onClose, onSuccess }) => {
@@ -570,3 +549,5 @@ export const ValidationDialog: React.FC<ValidationDialogProps> = ({ request, pro
     </Dialog>
   );
 };
+
+    
