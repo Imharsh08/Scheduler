@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Header } from '@/components/header';
 import { TaskList } from '@/components/task-list';
 import { ScheduleGrid } from '@/components/schedule-grid';
@@ -20,6 +20,7 @@ import { EditScheduledTaskDialog } from '@/components/edit-scheduled-task-dialog
 import { generateIdealSchedule } from '@/lib/scheduler';
 import { GanttChartView } from '@/components/gantt-chart-view';
 import { ScheduleSettingsDialog } from '@/components/schedule-settings-dialog';
+import { Button } from '@/components/ui/button';
 import { 
     startOfWeek, 
     endOfWeek, 
@@ -34,6 +35,8 @@ import {
     setMinutes,
     setSeconds,
     addMinutes,
+    addDays,
+    isWithinInterval,
 } from 'date-fns';
 
 const getShiftStartDateTime = (shift: Shift): Date => {
@@ -77,6 +80,7 @@ export default function Home() {
   const [scheduleHorizon, setScheduleHorizon] = useState<'weekly' | 'monthly'>('weekly');
   const [holidays, setHolidays] = useState<Date[]>([]);
   const [tempHolidays, setTempHolidays] = useState<Date[]>([]);
+  const [currentWeek, setCurrentWeek] = useState(0);
 
   useEffect(() => {
     try {
@@ -113,6 +117,10 @@ export default function Home() {
       console.error("Failed to load data from localStorage", error);
     }
   }, []);
+
+  useEffect(() => {
+    setCurrentWeek(0);
+  }, [scheduleHorizon]);
 
   const generateShiftsForHorizon = (horizon: 'weekly' | 'monthly', holidays: Date[]) => {
       const today = new Date();
@@ -169,6 +177,43 @@ export default function Home() {
 
       setShiftsByPress(newShiftsByPress);
   }, [productionConditions, scheduleHorizon, holidays, scheduleByPress]);
+
+  const weeksInMonth = useMemo(() => {
+    if (scheduleHorizon !== 'monthly') return [];
+    const today = new Date();
+    const start = startOfMonth(today);
+    const end = endOfMonth(today);
+    
+    const weeks = [];
+    let weekStart = startOfWeek(start, { weekStartsOn: 1 });
+    
+    while (weekStart <= end) {
+        const weekEnd = endOfWeek(weekStart, { weekStartsOn: 1 });
+        weeks.push({ start: weekStart, end: weekEnd });
+        weekStart = addDays(weekStart, 7);
+    }
+    return weeks;
+  }, [scheduleHorizon]);
+
+  const displayedShifts = useMemo(() => {
+    if (selectedPress === null) return [];
+    const allShifts = shiftsByPress[selectedPress] || [];
+    
+    if (scheduleHorizon === 'weekly') {
+        return allShifts;
+    }
+
+    if (weeksInMonth.length > 0 && currentWeek < weeksInMonth.length) {
+        const currentWeekInterval = weeksInMonth[currentWeek];
+        return allShifts.filter(shift => {
+            const shiftDate = new Date(shift.date + 'T12:00:00Z');
+            return isWithinInterval(shiftDate, currentWeekInterval);
+        });
+    }
+
+    return [];
+  }, [selectedPress, shiftsByPress, scheduleHorizon, weeksInMonth, currentWeek]);
+
 
   const handleSetViewMode = (mode: 'grid' | 'gantt') => {
     setViewMode(mode);
@@ -987,10 +1032,25 @@ export default function Home() {
                 selectedPress={selectedPress}
               />
             </div>
-            <div className="lg:w-2/3 flex-1 overflow-x-auto">
+            <div className="lg:w-2/3 flex-1 flex flex-col gap-2 overflow-x-auto">
+               {viewMode === 'grid' && scheduleHorizon === 'monthly' && weeksInMonth.length > 1 && (
+                <div className="flex items-center gap-2 bg-card p-2 rounded-lg border shadow-sm flex-wrap">
+                    <p className="text-sm font-medium mr-2">Week:</p>
+                    {weeksInMonth.map((week, index) => (
+                        <Button
+                            key={index}
+                            variant={currentWeek === index ? 'default' : 'outline'}
+                            size="sm"
+                            onClick={() => setCurrentWeek(index)}
+                        >
+                            {format(week.start, 'd')} - {format(week.end, 'd MMM')}
+                        </Button>
+                    ))}
+                </div>
+               )}
               {viewMode === 'grid' ? (
                 <ScheduleGrid
-                  shifts={selectedPress !== null ? shiftsByPress[selectedPress] || [] : []}
+                  shifts={displayedShifts}
                   schedule={selectedPress !== null ? scheduleByPress[selectedPress] || {} : {}}
                   onDrop={handleDrop}
                   dieColors={dieColors}
