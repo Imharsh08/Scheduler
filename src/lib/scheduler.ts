@@ -1,26 +1,10 @@
 
+
 'use server';
 
 import type { Task, ProductionCondition, Shift, Schedule, ScheduledTask } from '@/types';
-import { startOfWeek, nextDay, setHours, setMinutes, setSeconds, addMinutes } from 'date-fns';
-
-const dayIndexMap: Record<string, 0 | 1 | 2 | 3 | 4 | 5 | 6> = {
-  Sunday: 0, Monday: 1, Tuesday: 2, Wednesday: 3, Thursday: 4, Friday: 5, Saturday: 6,
-};
-
-const getShiftStartDateTime = (shift: Shift): Date => {
-  const now = new Date();
-  const thisMonday = startOfWeek(now, { weekStartsOn: 1 });
-  const targetDayIndex = dayIndexMap[shift.day];
-  let shiftDate = nextDay(thisMonday, targetDayIndex);
-  
-  if (shiftDate < now && shiftDate.getDate() !== now.getDate()) {
-    shiftDate = nextDay(addMinutes(thisMonday, 10080), targetDayIndex);
-  }
-  
-  const hours = shift.type === 'Day' ? 8 : 20;
-  return setSeconds(setMinutes(setHours(shiftDate, hours), 0), 0);
-};
+import { addMinutes } from 'date-fns';
+import { getShiftStartDateTime } from './time-utils';
 
 const priorityOrder: Record<Task['priority'], number> = { 'High': 1, 'Normal': 2, 'Low': 3, 'None': 4 };
 
@@ -68,13 +52,18 @@ export const generateIdealSchedule = async ({
     if (compatibleConditions.length === 0) continue;
 
     const bestCondition = compatibleConditions.sort((a, b) => {
-      const piecesA = Math.max(a.piecesPerCycle1, a.piecesPerCycle2);
-      const piecesB = Math.max(b.piecesPerCycle1, b.piecesPerCycle2);
-      return piecesB - piecesA;
+      const pphA = Math.max(a.piecesPerHour1, a.piecesPerHour2);
+      const pphB = Math.max(b.piecesPerHour1, b.piecesPerHour2);
+      if (pphA !== pphB) return pphB - pphA;
+      // If pieces are equal, prefer lower cure time
+      return a.cureTime - b.cureTime;
     })[0];
 
-    const piecesPerCycle = Math.max(bestCondition.piecesPerCycle1, bestCondition.piecesPerCycle2);
-    if (piecesPerCycle <= 0 || bestCondition.cureTime <= 0) continue;
+    const piecesPerHour = Math.max(bestCondition.piecesPerHour1, bestCondition.piecesPerHour2);
+    if (piecesPerHour <= 0 || bestCondition.cureTime <= 0) continue;
+    
+    const piecesPerCycle = (piecesPerHour * bestCondition.cureTime) / 60;
+    if (piecesPerCycle <= 0) continue;
 
     let remainingQtyForThisTask = tasksMap.get(task.jobCardNumber)!.remainingQuantity;
 
@@ -114,6 +103,9 @@ export const generateIdealSchedule = async ({
         creationDate: task.creationDate,
         deliveryDate: task.deliveryDate,
         orderedQuantity: task.orderedQuantity,
+        isSaved: false,
+        trackingSteps: [],
+        type: 'production'
       };
 
       if (!newSchedule[shift.id]) newSchedule[shift.id] = [];

@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
@@ -7,8 +8,7 @@ import { TaskList } from '@/components/task-list';
 import { ScheduleGrid } from '@/components/schedule-grid';
 import { PressWorkloadPanel } from '@/components/press-workload-panel';
 import { ValidationDialog } from '@/components/validation-dialog';
-import { initialProductionConditions, initialTasks } from '@/lib/mock-data';
-import type { Task, Shift, Schedule, ProductionCondition, ScheduledTask, ValidationRequest, IntegrationUrls } from '@/types';
+import type { Task, Shift, Schedule, ProductionCondition, ScheduledTask, ValidationRequest, IntegrationUrls, FGStockItem, AppSettings } from '@/types';
 import { useToast } from "@/hooks/use-toast";
 import { IntegrationDialog } from '@/components/integration-dialog';
 import { ColorSettingsDialog } from '@/components/color-settings-dialog';
@@ -21,6 +21,9 @@ import { generateIdealSchedule } from '@/lib/scheduler';
 import { GanttChartView } from '@/components/gantt-chart-view';
 import { ScheduleSettingsDialog } from '@/components/schedule-settings-dialog';
 import { Button } from '@/components/ui/button';
+import { addTrackingStepsIfNeeded } from '@/lib/tracking-utils';
+import { MaintenanceTaskDialog } from '@/components/maintenance-task-dialog';
+import { getShiftStartDateTime, getShiftEndDateTime, getShiftCapacityInMinutes } from '@/lib/time-utils';
 import { 
     startOfWeek, 
     endOfWeek, 
@@ -31,31 +34,36 @@ import {
     isSameDay, 
     getDay,
     parseISO,
-    setHours,
-    setMinutes,
-    setSeconds,
     addMinutes,
     addDays,
     isWithinInterval,
+    isBefore,
+    startOfDay,
+    isValid,
 } from 'date-fns';
 
-const getShiftStartDateTime = (shift: Shift): Date => {
-    const [year, month, day] = shift.date.split('-').map(Number);
-    const hours = shift.type === 'Day' ? 8 : 20;
-    // JS Date months are 0-indexed, so subtract 1 from month. Use UTC to avoid timezone shifts.
-    return setSeconds(setMinutes(setHours(new Date(Date.UTC(year, month - 1, day)), hours), 0), 0);
+const DEFAULT_SETTINGS: AppSettings = {
+  scheduleHorizon: 'weekly',
+  holidays: [],
+  includeToday: false,
+  dayShiftStart: '08:00',
+  dayShiftEnd: '20:00',
+  nightShiftStart: '20:00',
+  nightShiftEnd: '08:00', // Ends on the next day
+  defaultMaintenanceDuration: 30,
 };
 
 export default function Home() {
-  const [tasks, setTasks] = useState<Task[]>(initialTasks);
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [shiftsByPress, setShiftsByPress] = useState<Record<number, Shift[]>>({});
   const [scheduleByPress, setScheduleByPress] = useState<Record<number, Schedule>>({});
-  const [productionConditions, setProductionConditions] = useState<ProductionCondition[]>(initialProductionConditions);
+  const [savedScheduleSnapshot, setSavedScheduleSnapshot] = useState<Record<number, Schedule>>({});
+  const [productionConditions, setProductionConditions] = useState<ProductionCondition[]>([]);
   const [validationRequest, setValidationRequest] = useState<ValidationRequest | null>(null);
-  const [isLoadingTasks, setIsLoadingTasks] = useState(false);
-  const [isLoadingConditions, setIsLoadingConditions] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [selectedPress, setSelectedPress] = useState<number | null>(null);
+  const [selectedDie, setSelectedDie] = useState<number | null>(null);
   const { toast } = useToast();
 
   const [urls, setUrls] = useState<IntegrationUrls>({
@@ -63,6 +71,8 @@ export default function Home() {
     tasks: '',
     conditions: '',
     save: '',
+    scheduledTasks: '',
+    tracking: '',
   });
 
   const [isIntegrationDialogOpen, setIsIntegrationDialogOpen] = useState(false);
@@ -70,6 +80,7 @@ export default function Home() {
   const [isProductionConditionsDialogOpen, setIsProductionConditionsDialogOpen] = useState(false);
   const [isAllTasksDialogOpen, setIsAllTasksDialogOpen] = useState(false);
   const [isScheduleSettingsDialogOpen, setIsScheduleSettingsDialogOpen] = useState(false);
+  const [isMaintenanceDialogOpen, setIsMaintenanceDialogOpen] = useState(false);
   const [dieColors, setDieColors] = useState<Record<number, string>>({});
   
   const [taskToRemove, setTaskToRemove] = useState<ScheduledTask | null>(null);
@@ -77,74 +88,95 @@ export default function Home() {
   const [generatingPressNo, setGeneratingPressNo] = useState<number | null>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'gantt'>('grid');
 
-  const [scheduleHorizon, setScheduleHorizon] = useState<'weekly' | 'monthly'>('weekly');
-  const [holidays, setHolidays] = useState<Date[]>([]);
-  const [tempHolidays, setTempHolidays] = useState<Date[]>([]);
   const [currentWeek, setCurrentWeek] = useState(0);
+  const [appSettings, setAppSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
+  const [tempSettings, setTempSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
+
+  const [fgStock, setFgStock] = useState<FGStockItem[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
-    try {
-      const savedUrls = localStorage.getItem('integrationUrls');
-      if (savedUrls) {
-        setUrls(JSON.parse(savedUrls));
-      } else {
-        setIsIntegrationDialogOpen(true);
-      }
+    // This effect runs once on mount to load settings from localStorage
+    const loadInitialSettings = async () => {
+      setIsLoading(true);
+      try {
+        const savedUrls = localStorage.getItem('integrationUrls');
+        if (savedUrls) {
+          const parsedUrls: IntegrationUrls = JSON.parse(savedUrls);
+          setUrls(parsedUrls);
+          if (parsedUrls.tasks && parsedUrls.conditions && parsedUrls.scheduledTasks) {
+              await handleInitialDataLoad(parsedUrls);
+          } else if (parsedUrls.config) {
+              await handleLoadUrlsFromSheet(parsedUrls.config, true); // silent=true
+          } else {
+              setIsIntegrationDialogOpen(true);
+              setIsLoading(false);
+          }
+        } else {
+          setIsIntegrationDialogOpen(true);
+          setIsLoading(false);
+        }
 
-      const savedColors = localStorage.getItem('dieColors');
-      if (savedColors) {
-        setDieColors(JSON.parse(savedColors));
-      }
-
-      const savedViewMode = localStorage.getItem('viewMode') as 'grid' | 'gantt' | null;
-      if (savedViewMode) {
-          setViewMode(savedViewMode);
-      }
+        const savedColors = localStorage.getItem('dieColors');
+        if (savedColors) setDieColors(JSON.parse(savedColors));
+        
+        const savedViewMode = localStorage.getItem('viewMode') as 'grid' | 'gantt' | null;
+        if (savedViewMode) setViewMode(savedViewMode);
       
-      const savedHorizon = localStorage.getItem('scheduleHorizon') as 'weekly' | 'monthly' | null;
-      if (savedHorizon) {
-          setScheduleHorizon(savedHorizon);
-      }
-      
-      const savedHolidays = localStorage.getItem('holidays');
-      if (savedHolidays) {
-          const parsedHolidays = JSON.parse(savedHolidays).map((d: string) => parseISO(d));
-          setHolidays(parsedHolidays);
-          setTempHolidays(parsedHolidays);
-      }
+        const savedAppSettings = localStorage.getItem('appSettings');
+        if (savedAppSettings) {
+            const parsedSettings: AppSettings = JSON.parse(savedAppSettings);
+            parsedSettings.holidays = parsedSettings.holidays.map((d: any) => parseISO(d));
+            setAppSettings(parsedSettings);
+            setTempSettings(parsedSettings);
+        } else {
+            setTempSettings(DEFAULT_SETTINGS);
+        }
 
-    } catch (error) {
-      console.error("Failed to load data from localStorage", error);
-    }
-  }, []);
+      } catch (error) {
+        console.error("Failed to load data from localStorage", error);
+        setTimeout(() => toast({ title: "Error", description: "Failed to load initial settings.", variant: "destructive" }), 0);
+        setIsLoading(false);
+      }
+    };
+
+    loadInitialSettings();
+  }, []); // Run only once
 
   useEffect(() => {
     setCurrentWeek(0);
-  }, [scheduleHorizon]);
+  }, [appSettings.scheduleHorizon]);
 
-  const generateShiftsForHorizon = (horizon: 'weekly' | 'monthly', holidays: Date[]) => {
+  const generateShiftsForHorizon = (settings: AppSettings) => {
+      const { scheduleHorizon, holidays, dayShiftStart, dayShiftEnd, nightShiftStart, nightShiftEnd } = settings;
       const today = new Date();
-      // For weekly view, always show the current week starting on Monday
-      // For monthly view, show the current calendar month
-      const interval = horizon === 'weekly' 
+      const startOfToday = startOfDay(today);
+      const interval = scheduleHorizon === 'weekly' 
           ? { start: startOfWeek(today, { weekStartsOn: 1 }), end: endOfWeek(today, { weekStartsOn: 1 }) }
           : { start: startOfMonth(today), end: endOfMonth(today) };
 
-      const daysInInterval = eachDayOfInterval(interval);
+      let daysInInterval = eachDayOfInterval(interval);
+      if (!settings.includeToday) {
+        daysInInterval = daysInInterval.filter(day => !isSameDay(day, startOfToday));
+      } else {
+        daysInInterval = daysInInterval.filter(day => !isBefore(day, startOfToday));
+      }
+      
       const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
       const generatedShifts: Shift[] = [];
 
       daysInInterval.forEach(day => {
           const isHoliday = holidays.some(holiday => isSameDay(day, holiday));
-          if (isHoliday) {
-              return; // Skip this day
-          }
+          if (isHoliday) return;
 
           const dayName = dayNames[getDay(day)];
           const dateStr = format(day, 'yyyy-MM-dd');
           
-          generatedShifts.push({ id: `${dateStr}-day`, date: dateStr, day: dayName, type: 'Day', capacity: 720, remainingCapacity: 720 });
-          generatedShifts.push({ id: `${dateStr}-night`, date: dateStr, day: dayName, type: 'Night', capacity: 720, remainingCapacity: 720 });
+          const dayCapacity = getShiftCapacityInMinutes(dayShiftStart, dayShiftEnd);
+          generatedShifts.push({ id: `${dateStr}-day`, date: dateStr, day: dayName, type: 'Day', capacity: dayCapacity, remainingCapacity: dayCapacity, startTime: dayShiftStart, endTime: dayShiftEnd });
+          
+          const nightCapacity = getShiftCapacityInMinutes(nightShiftStart, nightShiftEnd);
+          generatedShifts.push({ id: `${dateStr}-night`, date: dateStr, day: dayName, type: 'Night', capacity: nightCapacity, remainingCapacity: nightCapacity, startTime: nightShiftStart, endTime: nightShiftEnd });
       });
       return generatedShifts;
   };
@@ -159,7 +191,7 @@ export default function Home() {
           return;
       }
       
-      const baseShifts = generateShiftsForHorizon(scheduleHorizon, holidays);
+      const baseShifts = generateShiftsForHorizon(appSettings);
       const newShiftsByPress: Record<number, Shift[]> = {};
 
       pressNos.forEach(pressNo => {
@@ -176,10 +208,10 @@ export default function Home() {
       });
 
       setShiftsByPress(newShiftsByPress);
-  }, [productionConditions, scheduleHorizon, holidays, scheduleByPress]);
+  }, [productionConditions, appSettings, scheduleByPress]);
 
   const weeksInMonth = useMemo(() => {
-    if (scheduleHorizon !== 'monthly') return [];
+    if (appSettings.scheduleHorizon !== 'monthly') return [];
     const today = new Date();
     const start = startOfMonth(today);
     const end = endOfMonth(today);
@@ -193,13 +225,13 @@ export default function Home() {
         weekStart = addDays(weekStart, 7);
     }
     return weeks;
-  }, [scheduleHorizon]);
+  }, [appSettings.scheduleHorizon]);
 
   const displayedShifts = useMemo(() => {
     if (selectedPress === null) return [];
     const allShifts = shiftsByPress[selectedPress] || [];
     
-    if (scheduleHorizon === 'weekly') {
+    if (appSettings.scheduleHorizon === 'weekly') {
         return allShifts;
     }
 
@@ -212,7 +244,135 @@ export default function Home() {
     }
 
     return [];
-  }, [selectedPress, shiftsByPress, scheduleHorizon, weeksInMonth, currentWeek]);
+  }, [selectedPress, shiftsByPress, appSettings.scheduleHorizon, weeksInMonth, currentWeek]);
+
+  const processResponse = async (res: Response, name: string) => {
+    const text = await res.text();
+    
+    if (!res.ok) {
+        try {
+            const errorJson = JSON.parse(text);
+            const errorMessage = errorJson.error || `Failed to fetch ${name}`;
+            const errorDetails = errorJson.details || `No further details provided.`;
+            throw new Error(`${errorMessage} - Details: ${errorDetails}`);
+        } catch (e) {
+            if (text.trim().toLowerCase().startsWith('<!doctype html>')) {
+                throw new Error(`Authentication Error for ${name}: Received a login page instead of data. Please ensure your Google Apps Script is deployed with "Who has access" set to "Anyone".`);
+            }
+            throw new Error(`Failed to fetch ${name}. Status: ${res.status}. Details: ${text.substring(0, 200)}...`);
+        }
+    }
+    
+    try {
+        const data = JSON.parse(text);
+        return data;
+    } catch (error) {
+        throw new Error(`Failed to parse the response for ${name}. The response was not valid JSON. Details: ${text.substring(0, 500)}...`);
+    }
+  };
+
+  const handleInitialDataLoad = async (urlsToLoad: IntegrationUrls) => {
+    setIsLoading(true);
+    setTimeout(() => toast({ title: "Loading Data", description: "Fetching latest schedule..." }), 0);
+
+    try {
+        // ========= STAGE 1: Load saved schedule and render it immediately =========
+        const scheduledTasksRes = await fetch(`/api/tasks?url=${encodeURIComponent(urlsToLoad.scheduledTasks)}`);
+        const savedScheduleData = await processResponse(scheduledTasksRes, 'Saved Schedule');
+
+        const newScheduleByPress: Record<number, Schedule> = {};
+        const scheduledQuantities: Record<string, number> = {};
+        const newFgStock: FGStockItem[] = [];
+
+        if (Array.isArray(savedScheduleData)) {
+            savedScheduleData.forEach((task: any) => {
+                const enrichedTask = addTrackingStepsIfNeeded(task);
+                if (!task.pressNo || !task.shiftId) return;
+                if (!newScheduleByPress[task.pressNo]) newScheduleByPress[task.pressNo] = {};
+                if (!newScheduleByPress[task.pressNo][task.shiftId]) newScheduleByPress[task.pressNo][task.shiftId] = [];
+
+                const taskWithType = { ...enrichedTask, id: task.id || `${task.jobCardNumber}-${task.pressNo}-${Date.now()}-${Math.floor(Math.random() * 1000)}`, isSaved: true, type: 'production' as const, scheduledQuantity: Math.ceil(task.scheduledQuantity) };
+                newScheduleByPress[task.pressNo][task.shiftId].push(taskWithType);
+                
+                if (task.jobCardNumber) {
+                    scheduledQuantities[task.jobCardNumber] = (scheduledQuantities[task.jobCardNumber] || 0) + Math.ceil(task.scheduledQuantity);
+                }
+
+                const inspectionStep = enrichedTask.trackingSteps.find(s => s.stepName === 'Inspection');
+                if (inspectionStep && inspectionStep.excessQty > 0) {
+                    newFgStock.push({ itemCode: enrichedTask.itemCode, quantity: inspectionStep.excessQty, sourceJobCard: enrichedTask.jobCardNumber, creationDate: new Date().toISOString() });
+                }
+            });
+        }
+        setScheduleByPress(newScheduleByPress);
+        setSavedScheduleSnapshot(JSON.parse(JSON.stringify(newScheduleByPress)));
+        setFgStock(newFgStock);
+        
+        setTimeout(() => toast({ title: "Schedule Loaded", description: "Fetching unscheduled tasks..." }), 0);
+
+        // ========= STAGE 2: Load conditions and unscheduled tasks in parallel =========
+        const [conditionsData, tasksData] = await Promise.all([
+            processResponse(await fetch(`/api/tasks?url=${encodeURIComponent(urlsToLoad.conditions)}`), 'Production Conditions'),
+            processResponse(await fetch(`/api/tasks?url=${encodeURIComponent(urlsToLoad.tasks)}`), 'Unscheduled Tasks')
+        ]);
+        
+        const fetchedConditions: ProductionCondition[] = (Array.isArray(conditionsData) ? conditionsData : []).map((item: any) => {
+            const cureTimeInSeconds = Number(item.cureTime) || 0;
+            const cureTimeInMinutes = cureTimeInSeconds > 0 ? Math.ceil(cureTimeInSeconds / 60) : 0;
+            return {
+                itemCode: item.itemCode,
+                pressNo: item.pressNo,
+                dieNo: item.dieNo,
+                material: item.material,
+                piecesPerHour1: item.piecesPerHour1 || 0,
+                piecesPerHour2: item.piecesPerHour2 || 0,
+                cureTime: cureTimeInMinutes,
+                maintenanceAfterQty: item.maintenanceAfterQty || undefined,
+            };
+        });
+        setProductionConditions(fetchedConditions);
+        
+        // ========= STAGE 3: Process unscheduled tasks and update the UI =========
+        const fgStockByItemCode: Record<string, number> = newFgStock.reduce((acc, item) => {
+          acc[item.itemCode] = (acc[item.itemCode] || 0) + item.quantity;
+          return acc;
+        }, {});
+
+        const fetchedTasks: Task[] = (Array.isArray(tasksData) ? tasksData : []).map((item: any) => {
+            const alreadyScheduled = scheduledQuantities[item.jobCardNumber] || 0;
+            const availableStock = fgStockByItemCode[item.itemCode] || 0;
+            const neededQty = item.orderedQuantity - alreadyScheduled;
+            const stockToUse = Math.min(neededQty, availableStock);
+            
+            fgStockByItemCode[item.itemCode] -= stockToUse;
+            
+            const creationDate = new Date(item.creationDate);
+            const deliveryDate = item.deliveryDate ? new Date(item.deliveryDate) : null;
+
+            return {
+              jobCardNumber: item.jobCardNumber,
+              orderedQuantity: item.orderedQuantity,
+              itemCode: item.itemCode,
+              material: item.material,
+              remainingQuantity: Math.ceil(neededQty - stockToUse),
+              priority: item.priority || 'None',
+              creationDate: isValid(creationDate) ? creationDate.toISOString() : new Date().toISOString(),
+              deliveryDate: deliveryDate && isValid(deliveryDate) ? deliveryDate.toISOString() : null,
+              taskType: 'production',
+              fgStockConsumed: stockToUse,
+            }
+        }).filter((task: Task) => task.remainingQuantity > 0);
+        setTasks(fetchedTasks);
+        
+        setTimeout(() => toast({ title: "Success", description: "All data loaded and synchronized." }), 0);
+
+    } catch (error) {
+        console.error("Failed to load initial data:", error);
+        setTimeout(() => toast({ title: "Data Load Error", description: error instanceof Error ? error.message : "An unknown error occurred.", variant: "destructive" }), 0);
+    } finally {
+        setIsLoading(false);
+    }
+}
 
 
   const handleSetViewMode = (mode: 'grid' | 'gantt') => {
@@ -221,265 +381,74 @@ export default function Home() {
         localStorage.setItem('viewMode', mode);
     } catch (error) {
         console.error("Failed to save view mode to localStorage", error);
-        toast({
+        setTimeout(() => toast({
             title: "Could not save view setting",
             description: "Your browser may be preventing saving to local storage.",
             variant: "destructive"
-        })
+        }), 0);
     }
   };
   
   const handleSaveScheduleSettings = () => {
-    setHolidays(tempHolidays);
+    setAppSettings(tempSettings);
     try {
-      localStorage.setItem('scheduleHorizon', scheduleHorizon);
-      localStorage.setItem('holidays', JSON.stringify(tempHolidays));
-      toast({
+      localStorage.setItem('appSettings', JSON.stringify(tempSettings));
+      setTimeout(() => toast({
         title: "Settings Saved",
         description: "Your schedule settings have been updated.",
-      });
+      }), 0);
     } catch (error) {
        console.error("Failed to save schedule settings to localStorage", error);
-       toast({
+       setTimeout(() => toast({
         title: "Error Saving Settings",
         description: "Could not save settings to your browser's local storage.",
         variant: "destructive",
-      });
+      }), 0);
     }
   };
 
   const handleOpenScheduleSettings = () => {
-    // Reset temp state to current state when opening
-    setTempHolidays(holidays);
+    setTempSettings(appSettings);
     setIsScheduleSettingsDialogOpen(true);
   };
-
-  const handleLoadTasks = async (taskUrl?: string) => {
-    const urlToUse = taskUrl || urls.tasks;
-    if (!urlToUse) {
-      toast({
-        title: "Task URL Not Set",
-        description: "Please set your Configuration URL and load the links first.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setIsLoadingTasks(true);
-    try {
-      const proxyUrl = `/api/tasks?url=${encodeURIComponent(urlToUse)}`;
-      const response = await fetch(proxyUrl);
-      const data = await response.json();
-
-      if (!response.ok) {
-        const errorMessage = data.details || data.error || `Request failed with status: ${response.status}`;
-        throw new Error(errorMessage);
-      }
-      
-      if (data.error) {
-        throw new Error(`Error from Google Script: ${data.error}`);
-      }
-
-      const scheduledQuantities: Record<string, number> = {};
-      // Use a more robust looping mechanism
-      for (const pressNo in scheduleByPress) {
-        const pressSchedule = scheduleByPress[pressNo];
-        for (const shiftId in pressSchedule) {
-          const shiftTasks = pressSchedule[shiftId];
-          for (const task of shiftTasks) {
-            scheduledQuantities[task.jobCardNumber] = (scheduledQuantities[task.jobCardNumber] || 0) + task.scheduledQuantity;
-          }
-        }
-      }
-
-      const fetchedTasks: Task[] = data.map((item: any) => {
-        const alreadyScheduled = scheduledQuantities[item.jobCardNumber] || 0;
-        return {
-          jobCardNumber: item.jobCardNumber,
-          orderedQuantity: item.orderedQuantity,
-          itemCode: item.itemCode,
-          material: item.material,
-          remainingQuantity: item.orderedQuantity - alreadyScheduled,
-          priority: item.priority || 'None',
-          creationDate: item.creationDate ? new Date(item.creationDate).toISOString() : new Date().toISOString(),
-          deliveryDate: item.deliveryDate ? new Date(item.deliveryDate).toISOString() : null,
-        }
-      }).filter((task: Task) => task.remainingQuantity > 0);
-
-      setTasks(fetchedTasks);
-      toast({
-        title: "Success",
-        description: `Loaded ${data.length} tasks and updated quantities based on the current schedule.`,
-      });
-
-    } catch (error) {
-      console.error("Failed to load tasks:", error);
-      let description = "Could not fetch tasks. Check the URL and try again.";
-      if (error instanceof Error) {
-          if (error.message.toLowerCase().includes("unexpected token")) {
-              description = "Received an invalid response from the server. This can happen if the Google Sheet URL is incorrect or requires a login. Please verify your Integration settings and ensure the Google Apps Script is deployed to be accessible by 'Anyone'.";
-          } else {
-              description = error.message;
-          }
-      }
-      toast({
-        title: "Error Loading Tasks",
-        description: description,
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoadingTasks(false);
-    }
-  };
-
-  const handleLoadProductionConditions = async (conditionUrl?: string) => {
-    const urlToUse = conditionUrl || urls.conditions;
-    if (!urlToUse) {
-      toast({
-        title: "Conditions URL Not Set",
-        description: "Please set your Configuration URL and load the links first.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setIsLoadingConditions(true);
-    try {
-      const proxyUrl = `/api/tasks?url=${encodeURIComponent(urlToUse)}`;
-      const response = await fetch(proxyUrl);
-      const data = await response.json();
-
-      if (!response.ok) {
-        const errorMessage = data.details || data.error || `Request failed with status: ${response.status}`;
-        throw new Error(errorMessage);
-      }
-      
-      if (data.error) {
-        throw new Error(`Error from Google Script: ${data.error}`);
-      }
-
-      const fetchedConditions: ProductionCondition[] = data.map((item: any) => ({
-        itemCode: item.itemCode,
-        pressNo: item.pressNo,
-        dieNo: item.dieNo,
-        material: item.material,
-        piecesPerCycle1: item.piecesPerCycle1 || 0,
-        piecesPerCycle2: item.piecesPerCycle2 || 0,
-        cureTime: item.cureTime,
-      }));
-
-      setProductionConditions(fetchedConditions);
-      toast({
-        title: "Success",
-        description: `Loaded ${fetchedConditions.length} production conditions.`,
-      });
-
-    } catch (error) {
-      console.error("Failed to load production conditions:", error);
-      let description = "Could not fetch conditions. Check the URL and try again.";
-      if (error instanceof Error) {
-          if (error.message.toLowerCase().includes("unexpected token")) {
-              description = "Received an invalid response from the server. This can happen if the Google Sheet URL is incorrect or requires a login. Please verify your Integration settings and ensure the Google Apps Script is deployed to be accessible by 'Anyone'.";
-          } else {
-              description = error.message;
-          }
-      }
-      toast({
-        title: "Error Loading Conditions",
-        description: description,
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoadingConditions(false);
-    }
-  };
-
-  const handleLoadUrlsFromSheet = async (configUrl: string) => {
+  
+  const handleLoadUrlsFromSheet = async (configUrl: string, silent = false) => {
     if (!configUrl) {
-      toast({ title: "URL Required", description: "Please enter the Configuration URL.", variant: "destructive" });
+      if (!silent) setTimeout(() => toast({ title: "URL Required", description: "Please enter the Configuration URL.", variant: "destructive" }), 0);
       return null;
     }
     try {
-      const proxyUrl = `/api/tasks?url=${encodeURIComponent(configUrl)}`;
-      const response = await fetch(proxyUrl);
-      const data = await response.json();
-
-      if (!response.ok) {
-        const errorMessage = data.details || data.error || 'Failed to fetch configuration.';
-        throw new Error(errorMessage);
-      }
-      
-      if (data.error) {
-        let userFriendlyDescription = data.error;
-        if (typeof userFriendlyDescription === 'string' && (userFriendlyDescription.includes("' not found") || userFriendlyDescription.includes("Missing 'Key' or 'Value' headers"))) {
-            userFriendlyDescription = `There's a problem with your "Web Url" configuration sheet. Please ensure it exists and has "Key" and "Value" columns as described in the setup instructions.`;
-        }
-         toast({
-            title: "Configuration Error",
-            description: userFriendlyDescription,
-            variant: "destructive",
-        });
-        return null;
-      }
+      const data = await processResponse(await fetch(`/api/tasks?url=${encodeURIComponent(configUrl)}`), 'Configuration Sheet');
       
       const newUrls: IntegrationUrls = {
         config: configUrl,
         tasks: data.tasks || '',
         conditions: data.conditions || '',
-        save: data.save || ''
+        save: data.save || '',
+        scheduledTasks: data.scheduledTasks || data.scheduled || '', // Support both keys
+        tracking: data.tracking || '',
       };
 
-      handleSaveUrls(newUrls);
-      toast({
-        title: "Configuration Loaded",
-        description: "Loading associated data automatically...",
-      });
+      setUrls(newUrls);
+      localStorage.setItem('integrationUrls', JSON.stringify(newUrls));
 
-      if (newUrls.tasks) {
-        handleLoadTasks(newUrls.tasks);
-      }
-      if (newUrls.conditions) {
-        handleLoadProductionConditions(newUrls.conditions);
-      }
+      if (newUrls.tasks && newUrls.conditions && (newUrls.save || newUrls.tracking) && newUrls.scheduledTasks) {
+          await handleInitialDataLoad(newUrls);
+          if (!silent) setTimeout(() => toast({ title: "Configuration Loaded", description: "All data has been loaded successfully." }), 0);
+          return newUrls;
+      } else {
+          const requiredKeys = ['tasks', 'conditions', 'scheduledTasks'];
+          if (!newUrls.save && !newUrls.tracking) requiredKeys.push('save/tracking');
 
-      return newUrls;
+          const missingKeys = requiredKeys.filter(k => !newUrls[k as keyof IntegrationUrls]);
+          if (!silent) setTimeout(() => toast({ title: "Configuration Incomplete", description: `Your 'Web Url' sheet is missing required keys: ${missingKeys.join(', ')}.`, variant: "destructive" }), 0);
+          return null;
+      }
 
     } catch (error) {
       console.error("Failed to load URLs from sheet:", error);
-      let description = "Could not fetch configuration. Check the URL and try again.";
-      if (error instanceof Error) {
-          if (error.message.toLowerCase().includes("unexpected token")) {
-              description = "Received an invalid response from the server. This can happen if the Google Sheet URL is incorrect or requires a login. Please verify your Integration settings and ensure the Google Apps Script is deployed to be accessible by 'Anyone'.";
-          } else {
-              description = error.message;
-          }
-      }
-      toast({
-        title: "Error Loading Configuration",
-        description: description,
-        variant: "destructive",
-      });
+      if (!silent) setTimeout(() => toast({ title: "Error Loading Configuration", description: error instanceof Error ? error.message : "An unknown error occurred.", variant: "destructive" }), 0);
       return null;
-    }
-  };
-
-  const handleSaveUrls = (newUrls: IntegrationUrls) => {
-    setUrls(newUrls);
-    try {
-      localStorage.setItem('integrationUrls', JSON.stringify(newUrls));
-      if(newUrls.config){ 
-         toast({
-          title: "Links Saved",
-          description: "Your integration links have been saved successfully.",
-        });
-      }
-    } catch (error) {
-      console.error("Failed to save URLs to localStorage", error);
-      toast({
-        title: "Error Saving Links",
-        description: "Could not save links to your browser's local storage.",
-        variant: "destructive",
-      });
     }
   };
 
@@ -487,68 +456,108 @@ export default function Home() {
     setDieColors(newColors);
     try {
       localStorage.setItem('dieColors', JSON.stringify(newColors));
-      toast({
+      setTimeout(() => toast({
         title: "Colors Saved",
         description: "Your die color settings have been updated.",
-      });
+      }), 0);
     } catch (error) {
       console.error("Failed to save colors to localStorage", error);
-      toast({
+      setTimeout(() => toast({
         title: "Error Saving Colors",
         description: "Could not save color settings to your browser's local storage.",
         variant: "destructive",
-      });
+      }), 0);
     }
   };
 
   const handleSaveSchedule = async () => {
-    const mergedSchedule: Schedule = {};
-    Object.values(scheduleByPress).forEach(pressSchedule => {
-      Object.keys(pressSchedule).forEach(shiftId => {
-        if (!mergedSchedule[shiftId]) {
-          mergedSchedule[shiftId] = [];
-        }
-        mergedSchedule[shiftId].push(...pressSchedule[shiftId]);
-      });
-    });
+    if (selectedPress === null) {
+      setTimeout(() => toast({
+        title: 'Select a Press',
+        description: 'Please select a press to save its schedule.',
+        variant: 'destructive',
+      }), 0);
+      return;
+    }
 
-    const scheduledItems = Object.values(mergedSchedule).flat();
-    if (scheduledItems.length === 0) {
-      toast({ title: "Nothing to Save", description: "The schedule is empty." });
+    const currentPressSchedule = scheduleByPress[selectedPress] || {};
+    const savedPressSchedule = savedScheduleSnapshot[selectedPress] || {};
+
+    if (JSON.stringify(currentPressSchedule) === JSON.stringify(savedPressSchedule)) {
+      setTimeout(() => toast({
+        title: 'No Changes to Save',
+        description: `The schedule for Press ${selectedPress} is already up-to-date.`,
+      }), 0);
       return;
     }
-    if (!urls.save) {
-      toast({ title: "Save URL Not Set", description: "Please set your Configuration URL and load the links first.", variant: "destructive" });
+
+    const saveUrl = urls.tracking || urls.save;
+    if (!saveUrl) {
+      setTimeout(() => toast({
+        title: 'Save URL Not Set',
+        description: 'Please provide the Save or Tracking URL in the Integration settings.',
+        variant: 'destructive',
+      }), 0);
       return;
     }
+    
+    // This now sends the full scheduled task object, including tracking steps.
+    const tasksToSaveForPress = Object.values(currentPressSchedule).flat();
 
     setIsSaving(true);
     try {
-      const response = await fetch('/api/schedule', {
+      // The save-tracking script can now handle an object with a 'tasks' array.
+      const payload = {
+        sheetUrl: saveUrl,
+        tasks: tasksToSaveForPress,
+      };
+
+      const response = await fetch('/api/tracking', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sheetUrl: urls.save, schedule: mergedSchedule }),
+        body: JSON.stringify(payload),
       });
+
       const result = await response.json();
       if (!response.ok) {
         throw new Error(result.error || result.details || 'Failed to save schedule.');
       }
-      toast({
-        title: "Schedule Saved",
-        description: `Successfully saved ${result.count || scheduledItems.length} items to your sheet.`,
+
+      // Update snapshot for the saved press
+      setSavedScheduleSnapshot(currentSnapshot => {
+        const newSnapshot = JSON.parse(JSON.stringify(currentSnapshot));
+        newSnapshot[selectedPress] = JSON.parse(JSON.stringify(currentPressSchedule));
+        return newSnapshot;
       });
+
+      // Mark tasks for the saved press as 'isSaved'
+      setScheduleByPress(currentSchedules => {
+        const newSchedules = JSON.parse(JSON.stringify(currentSchedules));
+        if (newSchedules[selectedPress]) {
+            Object.keys(newSchedules[selectedPress]).forEach(shiftId => {
+                newSchedules[selectedPress][shiftId] = newSchedules[selectedPress][shiftId].map((t: ScheduledTask) => ({...t, isSaved: true}));
+            });
+        }
+        return newSchedules;
+      });
+
+      setTimeout(() => toast({
+        title: `Schedule Saved for Press ${selectedPress}`,
+        description: result.message || `Successfully updated schedule in your sheet.`,
+      }), 0);
     } catch (error) {
       console.error("Failed to save schedule:", error);
       const description = error instanceof Error ? error.message : "An unknown error occurred.";
-      toast({
+      setTimeout(() => toast({
         title: "Error Saving Schedule",
         description: description,
         variant: "destructive",
-      });
+      }), 0);
     } finally {
       setIsSaving(false);
     }
   };
+
 
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>, taskId: string) => {
     e.dataTransfer.setData('text/plain', taskId);
@@ -564,8 +573,8 @@ export default function Home() {
   
   const recalculateShiftTasks = (tasks: ScheduledTask[], shift: Shift): { updatedTasks: ScheduledTask[], totalTime: number } => {
     const sortedTasks = [...tasks].sort((a, b) => {
-        const aDate = new Date(a.startTime);
-        const bDate = new Date(b.startTime);
+        const aDate = parseISO(a.startTime);
+        const bDate = parseISO(b.startTime);
         if (aDate.getTime() !== bDate.getTime()) {
             return aDate.getTime() - bDate.getTime();
         }
@@ -583,7 +592,7 @@ export default function Home() {
             ...task,
             startTime: newStartTime.toISOString(),
             endTime: newEndTime.toISOString(),
-            shiftId: shift.id, // Ensure shiftId is updated
+            shiftId: shift.id, 
         };
     });
 
@@ -593,83 +602,57 @@ export default function Home() {
   const handleDrop = (e: React.DragEvent<HTMLDivElement>, targetShiftId: string) => {
     e.preventDefault();
     if (selectedPress === null) {
-      toast({ title: "Select a Press First", description: "Please select a press from the workload panel to schedule a task.", variant: "destructive" });
-      return;
+        setTimeout(() => toast({ title: "Select a Press First", description: "Please select a press from the workload panel to schedule a task.", variant: "destructive" }), 0);
+        return;
     }
   
     const json_data = e.dataTransfer.getData('application/json');
     
-    // --- HANDLE TASK MOVE ---
     if (json_data) {
-      try {
-        const data = JSON.parse(json_data);
-        if (data.type === 'move_task') {
-          const movedTask: ScheduledTask = JSON.parse(data.taskJson);
-          const sourceShiftId = movedTask.shiftId;
-  
-          if (sourceShiftId === targetShiftId) return;
-  
-          const allShiftsForPress = shiftsByPress[selectedPress] || [];
-          const targetShift = allShiftsForPress.find(s => s.id === targetShiftId);
-          const sourceShift = allShiftsForPress.find(s => s.id === sourceShiftId);
-  
-          if (!targetShift || !sourceShift) {
-            toast({ title: "Error", description: "Could not find source or target shift.", variant: "destructive" });
-            return;
-          }
-  
-          if (targetShift.remainingCapacity < movedTask.timeTaken) {
-            toast({ title: "Cannot Move Task", description: `Not enough capacity in ${targetShift.day} ${targetShift.type} shift.`, variant: "destructive" });
-            return;
-          }
-          
-          let newSchedule: Record<number, Schedule> | null = null;
-          let newShifts: Record<number, Shift[]> | null = null;
+        try {
+            const data = JSON.parse(json_data);
+            if (data.type === 'move_task') {
+                const movedTask: ScheduledTask = JSON.parse(data.taskJson);
+                const sourceShiftId = movedTask.shiftId;
+        
+                if (sourceShiftId === targetShiftId) return;
+        
+                const allShiftsForPress = shiftsByPress[selectedPress] || [];
+                const targetShift = allShiftsForPress.find(s => s.id === targetShiftId);
+                const sourceShift = allShiftsForPress.find(s => s.id === sourceShiftId);
+        
+                if (!targetShift || !sourceShift) {
+                    setTimeout(() => toast({ title: "Error", description: "Could not find source or target shift.", variant: "destructive" }), 0);
+                    return;
+                }
+        
+                if (targetShift.remainingCapacity < movedTask.timeTaken) {
+                    setTimeout(() => toast({ title: "Cannot Move Task", description: `Not enough capacity in ${targetShift.day} ${targetShift.type} shift.`, variant: "destructive" }), 0);
+                    return;
+                }
 
-          setScheduleByPress(current => {
-              const scheduleCopy = JSON.parse(JSON.stringify(current));
-              const pressSchedule = scheduleCopy[selectedPress!] || {};
-
-              let sourceTasks = pressSchedule[sourceShiftId] || [];
-              let targetTasks = pressSchedule[targetShiftId] || [];
-
-              sourceTasks = sourceTasks.filter((t: ScheduledTask) => t.id !== movedTask.id);
-              targetTasks.push(movedTask);
-              
-              const { updatedTasks: updatedSourceTasks, totalTime: sourceTime } = recalculateShiftTasks(sourceTasks, sourceShift);
-              const { updatedTasks: updatedTargetTasks, totalTime: targetTime } = recalculateShiftTasks(targetTasks, targetShift);
-              
-              pressSchedule[sourceShiftId] = updatedSourceTasks;
-              pressSchedule[targetShiftId] = updatedTargetTasks;
-              
-              newSchedule = scheduleCopy;
-
-              setShiftsByPress(currentShifts => {
-                  const shiftsCopy = JSON.parse(JSON.stringify(currentShifts));
-                  const pressShiftsToUpdate = shiftsCopy[selectedPress!] || [];
-                  const sourceShiftToUpdate = pressShiftsToUpdate.find((s: Shift) => s.id === sourceShiftId);
-                  const targetShiftToUpdate = pressShiftsToUpdate.find((s: Shift) => s.id === targetShiftId);
-                  
-                  if(sourceShiftToUpdate) sourceShiftToUpdate.remainingCapacity = sourceShift.capacity - sourceTime;
-                  if(targetShiftToUpdate) targetShiftToUpdate.remainingCapacity = targetShift.capacity - targetTime;
-                  
-                  newShifts = shiftsCopy;
-                  return shiftsCopy;
-              });
-
-              return scheduleCopy;
-          });
-          
-          toast({ title: "Task Moved", description: `Task ${movedTask.jobCardNumber} moved successfully.` });
-  
-          return;
+                setScheduleByPress(currentSchedules => {
+                    const newSchedules = JSON.parse(JSON.stringify(currentSchedules));
+                    const pressSchedule = newSchedules[selectedPress!] || {};
+                    let sourceTasks = pressSchedule[sourceShiftId] || [];
+                    let targetTasks = pressSchedule[targetShiftId] || [];
+                    sourceTasks = sourceTasks.filter((t: ScheduledTask) => t.id !== movedTask.id);
+                    targetTasks.push({ ...movedTask, isSaved: false });
+                    const { updatedTasks: updatedSourceTasks } = recalculateShiftTasks(sourceTasks, sourceShift);
+                    const { updatedTasks: updatedTargetTasks } = recalculateShiftTasks(targetTasks, targetShift);
+                    pressSchedule[sourceShiftId] = updatedSourceTasks;
+                    pressSchedule[targetShiftId] = updatedTargetTasks;
+                    newSchedules[selectedPress!] = pressSchedule;
+                    return newSchedules;
+                });
+                setTimeout(() => toast({ title: "Task Moved", description: `Task ${movedTask.jobCardNumber} moved successfully.` }), 0);
+                return;
+            }
+        } catch (error) {
+            console.error("Error parsing dragged data", error);
         }
-      } catch (error) {
-        console.error("Error parsing dragged data", error);
-      }
     }
     
-    // --- HANDLE NEW TASK ---
     const taskId = e.dataTransfer.getData('text/plain');
     const task = tasks.find((t) => t.jobCardNumber === taskId);
     
@@ -677,33 +660,105 @@ export default function Home() {
     const shift = pressShifts.find((s) => s.id === targetShiftId);
 
     if (task && shift) {
+        if (task.taskType === 'maintenance') {
+            handleScheduleMaintenanceTask(task, shift, selectedPress);
+            return;
+        }
+
         const isTaskValidForPress = productionConditions.some(
-            pc => pc.itemCode === task.itemCode && pc.material === task.material && pc.pressNo === selectedPress
+            pc => pc.itemCode === task.itemCode && pc.pressNo === selectedPress
         );
 
         if (!isTaskValidForPress) {
-            toast({
+            setTimeout(() => toast({
                 title: "Incompatible Task",
                 description: `Task for item ${task.itemCode} cannot be run on Press ${selectedPress}.`,
                 variant: "destructive"
-            });
+            }), 0);
             return;
         }
         setValidationRequest({ task, shift, pressNo: selectedPress });
     }
 };
 
+const handleScheduleMaintenanceTask = (task: Task, shift: Shift, pressNo: number) => {
+    if (!task.timeTaken || !task.dieNo) return;
+
+    if (task.timeTaken > shift.remainingCapacity) {
+        toast({
+            title: 'Cannot Schedule Maintenance',
+            description: `Not enough capacity. Requires ${task.timeTaken} min, but only ${shift.remainingCapacity} min left.`,
+            variant: 'destructive',
+        });
+        return;
+    }
+
+    const scheduledTasksInShift = scheduleByPress[pressNo]?.[shift.id] || [];
+    const isDieAlreadyInMaintenance = scheduledTasksInShift.some(
+        st => st.type === 'maintenance' && st.dieNo === task.dieNo
+    );
+
+    if (isDieAlreadyInMaintenance) {
+        toast({
+            title: 'Duplicate Maintenance Task',
+            description: `Die ${task.dieNo} already has a maintenance task in this shift.`,
+            variant: 'destructive',
+        });
+        return;
+    }
+
+    setScheduleByPress(current => {
+        const newSchedules = JSON.parse(JSON.stringify(current));
+        if (!newSchedules[pressNo]) {
+            newSchedules[pressNo] = {};
+        }
+        const pressSchedule = newSchedules[pressNo];
+
+        const newMaintenanceTask: ScheduledTask = {
+            id: `${task.jobCardNumber}-${pressNo}-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+            jobCardNumber: task.jobCardNumber,
+            type: 'maintenance',
+            itemCode: task.itemCode,
+            pressNo: pressNo,
+            dieNo: task.dieNo,
+            scheduledQuantity: 0,
+            timeTaken: task.timeTaken,
+            shiftId: shift.id,
+            startTime: '', // Will be calculated by recalculateShiftTasks
+            endTime: '', // Will be calculated by recalculateShiftTasks
+            creationDate: task.creationDate,
+            isSaved: false,
+            trackingSteps: addTrackingStepsIfNeeded({}).trackingSteps,
+        };
+        
+        const { updatedTasks } = recalculateShiftTasks(
+            [...(pressSchedule[shift.id] || []), newMaintenanceTask],
+            shift
+        );
+        pressSchedule[shift.id] = updatedTasks;
+
+        return newSchedules;
+    });
+
+    setTasks(prevTasks => prevTasks.filter(t => t.jobCardNumber !== task.jobCardNumber));
+};
+
   const handlePressSelect = (pressNo: number | null) => {
     setSelectedPress(pressNo);
+    setSelectedDie(null);
   };
+  
+  const handleDieSelect = (dieNo: number | null) => {
+    setSelectedDie(dieNo);
+  }
 
   const handleScheduleClick = (task: Task, shiftId: string) => {
     if (selectedPress === null) {
-        toast({
+        setTimeout(() => toast({
             title: "Select a Press First",
             description: "Please select a press from the workload panel to schedule a task.",
             variant: "destructive"
-        });
+        }), 0);
         return;
     }
 
@@ -713,28 +768,70 @@ export default function Home() {
     if (shift) {
          setValidationRequest({ task, shift, pressNo: selectedPress });
     } else {
-         toast({
+         setTimeout(() => toast({
             title: "Shift Not Found",
             description: "The selected shift could not be found for the current press.",
             variant: "destructive"
-        });
+        }), 0);
     }
   };
 
   const filteredTasks = React.useMemo(() => {
-    if (selectedPress === null) {
-      return tasks;
+    let baseTasks = tasks;
+    
+    if (searchQuery) {
+        const lowerCaseQuery = searchQuery.toLowerCase();
+        baseTasks = baseTasks.filter(task => 
+            task.jobCardNumber.toLowerCase().includes(lowerCaseQuery) ||
+            task.itemCode.toLowerCase().includes(lowerCaseQuery)
+        );
     }
+
+    if (selectedPress === null) {
+      return baseTasks.filter(t => t.taskType !== 'maintenance');
+    }
+    
+    // Base filter: tasks compatible with the selected press
     const validItemCodesForPress = new Set(
-      productionConditions
-        .filter(pc => pc.pressNo === selectedPress)
-        .map(pc => pc.itemCode)
+        productionConditions
+            .filter(pc => pc.pressNo === selectedPress)
+            .map(pc => pc.itemCode)
     );
-    return tasks.filter(task => validItemCodesForPress.has(task.itemCode));
-  }, [tasks, selectedPress, productionConditions]);
+
+    const validDiesForPress = new Set(
+        productionConditions.filter(pc => pc.pressNo === selectedPress).map(pc => pc.dieNo)
+    );
+
+    let pressFilteredTasks = baseTasks.filter(task => {
+        if (task.taskType === 'maintenance') {
+            return task.dieNo !== undefined && validDiesForPress.has(task.dieNo);
+        }
+        return validItemCodesForPress.has(task.itemCode);
+    });
+
+    // If a die is also selected, apply a second layer of filtering
+    if (selectedDie !== null) {
+        // Get all item codes that can be produced with the selected die on the selected press
+        const validItemCodesForDie = new Set(
+            productionConditions
+                .filter(pc => pc.pressNo === selectedPress && pc.dieNo === selectedDie)
+                .map(pc => pc.itemCode)
+        );
+
+        pressFilteredTasks = pressFilteredTasks.filter(task => {
+            if (task.taskType === 'maintenance') {
+                return task.dieNo === selectedDie;
+            }
+            return validItemCodesForDie.has(task.itemCode);
+        });
+    }
+
+    return pressFilteredTasks;
+  }, [tasks, selectedPress, selectedDie, productionConditions, searchQuery]);
+
 
   const handleValidationSuccess = (
-    scheduledItems: Omit<ScheduledTask, 'id'>[],
+    scheduledItems: Omit<ScheduledTask, 'id' | 'isSaved' | 'trackingSteps'>[],
   ) => {
     if (!validationRequest) return;
     const { task, pressNo: pressToUpdate } = validationRequest;
@@ -742,40 +839,40 @@ export default function Home() {
     let totalQuantityScheduled = 0;
     
     setScheduleByPress(current => {
-      const pressSchedule = { ...(current[pressToUpdate] || {}) };
+      const newSchedules = JSON.parse(JSON.stringify(current));
+      const pressSchedule = newSchedules[pressToUpdate] || {};
       
       const newScheduledTasksWithIds: ScheduledTask[] = [];
       scheduledItems.forEach(item => {
-        totalQuantityScheduled += item.scheduledQuantity;
-        // Use a more robust unique ID to prevent key collisions
+        if (item.type === 'production') {
+            totalQuantityScheduled += item.scheduledQuantity;
+        }
         const newId = `${item.jobCardNumber}-${item.pressNo}-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-        newScheduledTasksWithIds.push({ ...item, id: newId });
+        newScheduledTasksWithIds.push({ 
+            ...item, 
+            id: newId, 
+            isSaved: false,
+            trackingSteps: addTrackingStepsIfNeeded({}).trackingSteps,
+        });
       });
 
       newScheduledTasksWithIds.forEach(scheduledTask => {
-        const currentShiftTasks = pressSchedule[scheduledTask.shiftId] || [];
-        pressSchedule[scheduledTask.shiftId] = [...currentShiftTasks, scheduledTask];
+        const { updatedTasks } = recalculateShiftTasks(
+            [...(pressSchedule[scheduledTask.shiftId] || []), scheduledTask],
+            shiftsByPress[pressToUpdate].find(s => s.id === scheduledTask.shiftId)!
+        );
+        pressSchedule[scheduledTask.shiftId] = updatedTasks;
       });
 
-      return { ...current, [pressToUpdate]: pressSchedule };
-    });
-
-    setShiftsByPress(current => {
-      const pressShifts = JSON.parse(JSON.stringify(current[pressToUpdate] || []));
-      scheduledItems.forEach(item => {
-        const shiftToUpdate = pressShifts.find((s: Shift) => s.id === item.shiftId);
-        if (shiftToUpdate) {
-            shiftToUpdate.remainingCapacity -= item.timeTaken;
-        }
-      });
-      return { ...current, [pressToUpdate]: pressShifts };
+      newSchedules[pressToUpdate] = pressSchedule;
+      return newSchedules;
     });
 
     setTasks((prevTasks) =>
       prevTasks
         .map((t) =>
           t.jobCardNumber === task.jobCardNumber
-            ? { ...t, remainingQuantity: t.remainingQuantity - totalQuantityScheduled }
+            ? { ...t, remainingQuantity: Math.ceil(t.remainingQuantity - totalQuantityScheduled) }
             : t
         )
         .filter((t) => t.remainingQuantity > 0)
@@ -785,24 +882,25 @@ export default function Home() {
   };
 
   const handleRefreshData = () => {
-    toast({
-      title: "Refreshing Data...",
-      description: "Fetching the latest tasks and conditions.",
-    });
-    handleLoadTasks();
-    handleLoadProductionConditions();
+    if (urls.config || (urls.tasks && urls.conditions && urls.scheduledTasks)) {
+        handleInitialDataLoad(urls);
+    } else {
+        setTimeout(() => toast({ title: "Configuration Needed", description: "Please set your integration URLs first.", variant: "destructive" }), 0);
+    }
   };
 
   const pressNumbers = React.useMemo(() => {
-    return [...new Set(productionConditions.map(pc => pc.pressNo))].sort((a,b) => a - b);
-  }, [productionConditions]);
+    const pressNosFromConditions = productionConditions.map(pc => pc.pressNo);
+    const pressNosFromSchedule = Object.keys(scheduleByPress).map(Number);
+    return [...new Set([...pressNosFromConditions, ...pressNosFromSchedule])].sort((a,b) => a - b);
+  }, [productionConditions, scheduleByPress]);
 
   const handleDownloadPdf = (pressNo: 'all' | number) => {
     generateSchedulePdf({
         pressNo, 
         scheduleByPress, 
         shiftsByPress,
-        scheduleHorizon,
+        scheduleHorizon: appSettings.scheduleHorizon,
         weeksInMonth,
         currentWeek,
     });
@@ -815,56 +913,71 @@ export default function Home() {
   const handleConfirmRemove = () => {
     if (!taskToRemove) return;
 
-    const { pressNo, shiftId, timeTaken, scheduledQuantity, jobCardNumber, creationDate, deliveryDate, itemCode, material, orderedQuantity, priority } = taskToRemove;
-
-    setShiftsByPress(current => {
-      const pressShifts = JSON.parse(JSON.stringify(current[pressNo] || []));
-      const shiftToUpdate = pressShifts.find((s: Shift) => s.id === shiftId);
-      if (shiftToUpdate) {
-        shiftToUpdate.remainingCapacity += timeTaken;
-      }
-      return { ...current, [pressNo]: pressShifts };
-    });
+    const { pressNo, shiftId, scheduledQuantity, jobCardNumber } = taskToRemove;
     
-    setTasks(currentTasks => {
-      const existingTaskIndex = currentTasks.findIndex(t => t.jobCardNumber === jobCardNumber);
-      if (existingTaskIndex > -1) {
-        // IMMUTABLE UPDATE: Create a new array and a new object for the updated task
-        return currentTasks.map((task, index) => {
-          if (index === existingTaskIndex) {
-            return {
-              ...task,
-              remainingQuantity: task.remainingQuantity + scheduledQuantity,
-            };
-          }
-          return task;
+    setScheduleByPress(currentSchedules => {
+        const newSchedules = JSON.parse(JSON.stringify(currentSchedules));
+        const pressSchedule = newSchedules[pressNo] || {};
+        const sourceShift = pressSchedule[shiftId] || [];
+        
+        const remainingTasksInShift = sourceShift.filter((t: ScheduledTask) => t.id !== taskToRemove.id);
+        const shiftInfo = shiftsByPress[pressNo].find(s => s.id === shiftId)!;
+        
+        const { updatedTasks } = recalculateShiftTasks(remainingTasksInShift, shiftInfo);
+        pressSchedule[shiftId] = updatedTasks;
+        
+        newSchedules[pressNo] = pressSchedule;
+        return newSchedules;
+    });
+
+    if (taskToRemove.type === 'production') {
+        setTasks(currentTasks => {
+            const existingTaskIndex = currentTasks.findIndex(t => t.jobCardNumber === jobCardNumber);
+            if (existingTaskIndex > -1) {
+                return currentTasks.map((task, index) => {
+                    if (index === existingTaskIndex) {
+                        return { ...task, remainingQuantity: Math.ceil(task.remainingQuantity + scheduledQuantity) };
+                    }
+                    return task;
+                });
+            } else {
+                const { itemCode, material, priority, creationDate, deliveryDate, orderedQuantity } = taskToRemove;
+                return [
+                    ...currentTasks,
+                    {
+                        jobCardNumber,
+                        itemCode: itemCode!,
+                        material: material!,
+                        priority: priority!,
+                        orderedQuantity: orderedQuantity!,
+                        remainingQuantity: Math.ceil(scheduledQuantity),
+                        creationDate: creationDate!,
+                        deliveryDate,
+                        taskType: 'production',
+                    }
+                ];
+            }
         });
-      } else {
-        // Task was fully scheduled, so add it back to the list
-        return [
-          ...currentTasks,
-          {
-            jobCardNumber,
-            itemCode,
-            material,
-            priority,
-            orderedQuantity,
-            remainingQuantity: scheduledQuantity,
-            creationDate,
-            deliveryDate,
-          }
-        ];
-      }
-    });
+    } else if (taskToRemove.type === 'maintenance') {
+        setTasks(currentTasks => {
+            const { jobCardNumber, itemCode, timeTaken, dieNo, creationDate } = taskToRemove;
+            const newMaintenanceTask: Task = {
+                jobCardNumber,
+                itemCode: itemCode!,
+                material: 'N/A',
+                orderedQuantity: 0,
+                remainingQuantity: 1,
+                priority: 'High',
+                creationDate,
+                taskType: 'maintenance',
+                timeTaken,
+                dieNo,
+            };
+            return [newMaintenanceTask, ...currentTasks];
+        });
+    }
 
-    setScheduleByPress(current => {
-      const pressSchedule = { ...(current[pressNo] || {}) };
-      const shiftTasks = (pressSchedule[shiftId] || []).filter(t => t.id !== taskToRemove.id);
-      pressSchedule[shiftId] = shiftTasks;
-      return { ...current, [pressNo]: pressSchedule };
-    });
-
-    toast({ title: "Task Removed", description: `Task ${jobCardNumber} has been removed from the schedule.` });
+    setTimeout(() => toast({ title: "Task Removed", description: `Task ${jobCardNumber} has been removed from the schedule.` }), 0);
     setTaskToRemove(null);
   };
 
@@ -883,114 +996,114 @@ export default function Home() {
   const handleUpdateScheduledTask = (updatedDetails: Partial<ScheduledTask>) => {
     if (!taskToEdit) return;
 
-    const { pressNo, shiftId, scheduledQuantity: oldQty, timeTaken: oldTime } = taskToEdit;
-    const { scheduledQuantity: newQty, timeTaken: newTime, endTime: newEndTime } = updatedDetails;
-
-    if (newQty === undefined || newTime === undefined || newEndTime === undefined) return;
-
+    const { pressNo, shiftId, scheduledQuantity: oldQty } = taskToEdit;
+    const { scheduledQuantity: newQty } = updatedDetails;
+    if (newQty === undefined) return;
+    
     const qtyDifference = newQty - oldQty;
-    const timeDifference = newTime - oldTime;
-
-    setTasks(currentTasks => {
-        const jobCardNumber = taskToEdit.jobCardNumber;
-        const existingTaskIndex = currentTasks.findIndex(t => t.jobCardNumber === jobCardNumber);
-        
-        // This logic handles returning quantity to the unscheduled list.
-        // `qtyDifference` will be negative if the quantity was reduced.
-        // `-= qtyDifference` correctly adds back the reduced amount.
-        const returnedQuantity = -qtyDifference; 
-
-        if (existingTaskIndex > -1) {
-            // IMMUTABLE UPDATE: Task already in the unscheduled list.
-            return currentTasks.map((task, index) => {
-              if (index === existingTaskIndex) {
-                return {
-                  ...task,
-                  remainingQuantity: task.remainingQuantity + returnedQuantity,
-                }
-              }
-              return task;
-            }).filter(t => t.remainingQuantity > 0);
-        } else {
-            // Task was not in the unscheduled list. Add it back if needed.
-            if (returnedQuantity > 0) {
-                const { itemCode, material, priority, creationDate, deliveryDate, orderedQuantity } = taskToEdit;
-                const newTask: Task = {
-                    jobCardNumber,
-                    itemCode,
-                    material,
-                    priority,
-                    orderedQuantity,
-                    remainingQuantity: returnedQuantity,
-                    creationDate,
-                    deliveryDate,
-                };
-                return [...currentTasks, newTask];
-            }
-            return currentTasks;
-        }
-    });
-
-    setShiftsByPress(current => {
-        const pressShifts = JSON.parse(JSON.stringify(current[pressNo] || []));
-        const shiftToUpdate = pressShifts.find((s: Shift) => s.id === shiftId);
-        if (shiftToUpdate) {
-            shiftToUpdate.remainingCapacity -= timeDifference;
-        }
-        return { ...current, [pressNo]: pressShifts };
-    });
+    const returnedQuantity = -qtyDifference; 
 
     setScheduleByPress(current => {
-        const pressSchedule = { ...(current[pressNo] || {}) };
-        const shiftTasks = (pressSchedule[shiftId] || []).map(t =>
-            t.id === taskToEdit.id ? { ...t, ...updatedDetails } : t
+        const newSchedules = JSON.parse(JSON.stringify(current));
+        const pressSchedule = newSchedules[pressNo] || {};
+        const shiftTasks = (pressSchedule[shiftId] || []).map((t: ScheduledTask) =>
+            t.id === taskToEdit.id ? { ...t, ...updatedDetails, isSaved: false } : t
         );
-        pressSchedule[shiftId] = shiftTasks;
-        return { ...current, [pressNo]: pressSchedule };
+        const shiftInfo = shiftsByPress[pressNo].find(s => s.id === shiftId)!;
+        const { updatedTasks } = recalculateShiftTasks(shiftTasks, shiftInfo);
+        pressSchedule[shiftId] = updatedTasks;
+        
+        newSchedules[pressNo] = pressSchedule;
+        return newSchedules;
     });
 
-    toast({ title: "Task Updated", description: `Task ${taskToEdit.jobCardNumber} quantity has been adjusted.` });
+    setTasks(currentTasks => {
+      const jobCardNumber = taskToEdit.jobCardNumber;
+      const existingTaskIndex = currentTasks.findIndex(t => t.jobCardNumber === jobCardNumber);
+      
+      if (existingTaskIndex > -1) {
+        const updatedTasks = currentTasks.map((task, index) => {
+          if (index === existingTaskIndex) {
+            return {
+              ...task,
+              remainingQuantity: Math.ceil(task.remainingQuantity + returnedQuantity),
+            };
+          }
+          return task;
+        });
+        return updatedTasks.filter(t => t.remainingQuantity > 0);
+      } else {
+        if (returnedQuantity > 0) {
+            const { itemCode, material, priority, creationDate, deliveryDate, orderedQuantity } = taskToEdit;
+            const newTask: Task = {
+                jobCardNumber,
+                itemCode: itemCode!,
+                material: updatedDetails.material || material!,
+                priority: priority!,
+                orderedQuantity: orderedQuantity!,
+                remainingQuantity: Math.ceil(returnedQuantity),
+                creationDate,
+                deliveryDate,
+                taskType: 'production',
+            };
+            return [...currentTasks, newTask];
+        }
+        return currentTasks;
+      }
+    });
+
+    setTimeout(() => toast({ title: "Task Updated", description: `Task ${taskToEdit.jobCardNumber} has been adjusted.` }), 0);
     setTaskToEdit(null);
   };
 
   const handleGenerateIdealSchedule = async (pressNo: number) => {
     setGeneratingPressNo(pressNo);
-    toast({
+    setTimeout(() => toast({
         title: `Generating schedule for Press ${pressNo}...`,
         description: "This may take a moment. Please wait.",
-    });
+    }), 0);
 
     await new Promise(resolve => setTimeout(resolve, 100));
 
     try {
         const taskPool = new Map<string, Task>();
         tasks.forEach(task => {
-            taskPool.set(task.jobCardNumber, JSON.parse(JSON.stringify(task)));
+            if (task.taskType === 'production') {
+                taskPool.set(task.jobCardNumber, JSON.parse(JSON.stringify(task)));
+            }
         });
 
         const scheduledTasksOnPress = scheduleByPress[pressNo] ? Object.values(scheduleByPress[pressNo]).flat() : [];
         scheduledTasksOnPress.forEach(st => {
-            if (taskPool.has(st.jobCardNumber)) {
-                taskPool.get(st.jobCardNumber)!.remainingQuantity += st.scheduledQuantity;
-            } else {
-                taskPool.set(st.jobCardNumber, {
-                    jobCardNumber: st.jobCardNumber,
-                    orderedQuantity: st.orderedQuantity,
-                    itemCode: st.itemCode,
-                    material: st.material,
-                    remainingQuantity: st.scheduledQuantity,
-                    priority: st.priority,
-                    creationDate: st.creationDate,
-                    deliveryDate: st.deliveryDate,
-                });
+            if (st.type === 'production') {
+                if (taskPool.has(st.jobCardNumber)) {
+                    taskPool.get(st.jobCardNumber)!.remainingQuantity += st.scheduledQuantity;
+                } else {
+                    taskPool.set(st.jobCardNumber, {
+                        jobCardNumber: st.jobCardNumber,
+                        orderedQuantity: st.orderedQuantity!,
+                        itemCode: st.itemCode!,
+                        material: st.material!,
+                        remainingQuantity: st.scheduledQuantity,
+                        priority: st.priority!,
+                        creationDate: st.creationDate,
+                        deliveryDate: st.deliveryDate,
+                        taskType: 'production'
+                    });
+                }
             }
         });
 
         const tasksToSchedule = Array.from(taskPool.values());
 
-        const freshShiftsForPress = generateShiftsForHorizon(scheduleHorizon, holidays);
+        let freshShiftsForPress = generateShiftsForHorizon(appSettings);
+
+        if (!appSettings.includeToday) {
+            const todayStr = format(new Date(), 'yyyy-MM-dd');
+            freshShiftsForPress = freshShiftsForPress.filter(s => s.date !== todayStr);
+        }
         
-        const { newSchedule, newShifts, remainingTasks } = await generateIdealSchedule({
+        const { newSchedule, remainingTasks } = await generateIdealSchedule({
             tasksToSchedule,
             productionConditions,
             shifts: freshShiftsForPress,
@@ -1006,25 +1119,68 @@ export default function Home() {
         });
 
         setScheduleByPress({ ...otherPressSchedules, [pressNo]: newSchedule });
-        setShiftsByPress(current => ({ ...current, [pressNo]: newShifts }));
-        setTasks(remainingTasks);
+        setTasks(remainingTasks.map(t => ({...t, remainingQuantity: Math.ceil(t.remainingQuantity)})));
         
-        toast({
+        setTimeout(() => toast({
             title: "Schedule Generated Successfully",
             description: `A new optimized schedule has been created for Press ${pressNo}.`,
-        });
+        }), 0);
 
     } catch (error) {
         console.error("Failed to generate ideal schedule:", error);
-        toast({
+        setTimeout(() => toast({
             title: "Error Generating Schedule",
             description: error instanceof Error ? error.message : "An unknown error occurred.",
             variant: "destructive",
-        });
+        }), 0);
     } finally {
         setGeneratingPressNo(null);
     }
   };
+
+  const handleProductionConditionUpdate = (updatedCondition: ProductionCondition) => {
+    setProductionConditions(currentConditions => {
+        const index = currentConditions.findIndex(c => 
+            c.itemCode === updatedCondition.itemCode &&
+            c.pressNo === updatedCondition.pressNo &&
+            c.dieNo === updatedCondition.dieNo &&
+            c.material === updatedCondition.material
+        );
+        if (index > -1) {
+            const newConditions = [...currentConditions];
+            newConditions[index] = updatedCondition;
+            setTimeout(() => toast({
+                title: "Production Data Updated",
+                description: `In-memory data for ${updatedCondition.itemCode} has been updated for this session.`
+            }), 0);
+            return newConditions;
+        }
+        return currentConditions;
+    });
+  };
+
+  const handleCreateMaintenanceTask = (pressNo: number, dieNo: number, duration: number, reason: string) => {
+    const newTask: Task = {
+        jobCardNumber: `MAINT-${dieNo}-${Date.now()}`,
+        taskType: 'maintenance',
+        itemCode: reason, // Use itemCode to store the reason
+        material: 'N/A',
+        orderedQuantity: 0,
+        remainingQuantity: 1, // Represents one maintenance task
+        priority: 'High',
+        creationDate: new Date().toISOString(),
+        timeTaken: duration,
+        dieNo: dieNo,
+    };
+
+    setTasks(prev => [newTask, ...prev]);
+    setIsMaintenanceDialogOpen(false);
+  };
+  
+  const handleUpdateMaintenanceDuration = (duration: number) => {
+    setTempSettings(prev => ({ ...prev, defaultMaintenanceDuration: duration }));
+    // Note: The duration is saved along with other settings when the main "Save" button is clicked.
+  }
 
 
   return (
@@ -1052,24 +1208,28 @@ export default function Home() {
           selectedPress={selectedPress}
           onGenerateIdealSchedule={handleGenerateIdealSchedule}
           generatingPressNo={generatingPressNo}
+          onDieSelect={handleDieSelect}
+          selectedDie={selectedDie}
         />
         <div className="flex-1 flex flex-col lg:flex-row gap-6 overflow-hidden">
-            <div className="lg:w-1/3 flex flex-col pr-2">
+            <div className="lg:w-1/3 flex flex-col overflow-y-auto pr-2">
               <TaskList
                 tasks={filteredTasks}
                 onDragStart={handleDragStart}
-                onLoadTasks={handleLoadTasks}
-                isLoading={isLoadingTasks}
+                isLoading={isLoading}
                 onScheduleClick={handleScheduleClick}
                 shifts={selectedPress !== null ? shiftsByPress[selectedPress] || [] : []}
                 isSchedulingDisabled={selectedPress === null}
                 productionConditions={productionConditions}
                 dieColors={dieColors}
                 selectedPress={selectedPress}
+                onAddMaintenanceClick={() => setIsMaintenanceDialogOpen(true)}
+                searchQuery={searchQuery}
+                setSearchQuery={setSearchQuery}
               />
             </div>
-            <div className="lg:w-2/3 flex-1 flex flex-col gap-2 overflow-x-auto">
-               {viewMode === 'grid' && scheduleHorizon === 'monthly' && weeksInMonth.length > 1 && (
+            <div className="lg:w-2/3 flex-1 flex flex-col gap-2 overflow-hidden">
+               {viewMode === 'grid' && appSettings.scheduleHorizon === 'monthly' && weeksInMonth.length > 1 && (
                 <div className="flex items-center gap-2 bg-card p-2 rounded-lg border shadow-sm flex-wrap">
                     <p className="text-sm font-medium mr-2">Week:</p>
                     {weeksInMonth.map((week, index) => (
@@ -1079,47 +1239,52 @@ export default function Home() {
                             size="sm"
                             onClick={() => setCurrentWeek(index)}
                         >
-                            {format(week.start, 'd')} - {format(week.end, 'd MMM')}
+                            {format(week.start, 'd')} - {format(week.end, 'MMM d')}
                         </Button>
                     ))}
                 </div>
                )}
-              {viewMode === 'grid' ? (
-                <ScheduleGrid
-                  shifts={displayedShifts}
-                  schedule={selectedPress !== null ? scheduleByPress[selectedPress] || {} : {}}
-                  onDrop={handleDrop}
-                  dieColors={dieColors}
-                  selectedPress={selectedPress}
-                  onRemoveRequest={handleRemoveRequest}
-                  onEditRequest={handleEditRequest}
-                  onTaskDragStart={handleScheduledTaskDragStart}
-                />
-              ) : (
-                <GanttChartView
-                  scheduleByPress={scheduleByPress}
-                  shiftsByPress={shiftsByPress}
-                  dieColors={dieColors}
-                  selectedPress={selectedPress}
-                />
-              )}
+              <div className="flex-1 overflow-auto">
+                  {viewMode === 'grid' ? (
+                    <ScheduleGrid
+                      shifts={displayedShifts}
+                      schedule={selectedPress !== null ? scheduleByPress[selectedPress] || {} : {}}
+                      onDrop={handleDrop}
+                      dieColors={dieColors}
+                      selectedPress={selectedPress}
+                      onRemoveRequest={handleRemoveRequest}
+                      onEditRequest={handleEditRequest}
+      onTaskDragStart={handleScheduledTaskDragStart}
+                    />
+                  ) : (
+                    <GanttChartView
+                      scheduleByPress={scheduleByPress}
+                      shiftsByPress={shiftsByPress}
+                      dieColors={dieColors}
+                      selectedPress={selectedPress}
+                    />
+                  )}
+              </div>
             </div>
         </div>
       </main>
       {validationRequest && (
         <ValidationDialog
+          open={!!validationRequest}
+          onOpenChange={(open) => !open && setValidationRequest(null)}
           request={validationRequest}
           productionConditions={productionConditions}
           shifts={shiftsByPress[validationRequest.pressNo] || []}
           onClose={() => setValidationRequest(null)}
           onSuccess={handleValidationSuccess}
+          onConditionUpdate={handleProductionConditionUpdate}
+          defaultMaintenanceDuration={appSettings.defaultMaintenanceDuration}
         />
       )}
       <IntegrationDialog
         open={isIntegrationDialogOpen}
         onOpenChange={setIsIntegrationDialogOpen}
         urls={urls}
-        onSaveUrls={handleSaveUrls}
         onLoadFromSheet={handleLoadUrlsFromSheet}
       />
       <ColorSettingsDialog
@@ -1133,15 +1298,13 @@ export default function Home() {
         open={isProductionConditionsDialogOpen}
         onOpenChange={setIsProductionConditionsDialogOpen}
         productionConditions={productionConditions}
-        isLoading={isLoadingConditions}
+        isLoading={isLoading}
       />
       <ScheduleSettingsDialog
         open={isScheduleSettingsDialogOpen}
         onOpenChange={setIsScheduleSettingsDialogOpen}
-        horizon={scheduleHorizon}
-        onHorizonChange={setScheduleHorizon}
-        holidays={tempHolidays}
-        onHolidaysChange={(dates) => setTempHolidays(dates || [])}
+        settings={tempSettings}
+        onSettingsChange={setTempSettings}
         onSave={handleSaveScheduleSettings}
       />
        <AllScheduledTasksDialog
@@ -1149,9 +1312,19 @@ export default function Home() {
         onOpenChange={setIsAllTasksDialogOpen}
         scheduleByPress={scheduleByPress}
         shiftsByPress={shiftsByPress}
-        scheduleHorizon={scheduleHorizon}
+        scheduleHorizon={appSettings.scheduleHorizon}
         weeksInMonth={weeksInMonth}
         currentWeek={currentWeek}
+      />
+      <MaintenanceTaskDialog
+        open={isMaintenanceDialogOpen}
+        onOpenChange={setIsMaintenanceDialogOpen}
+        productionConditions={productionConditions}
+        presses={pressNumbers}
+        onCreate={handleCreateMaintenanceTask}
+        selectedPress={selectedPress}
+        defaultDuration={appSettings.defaultMaintenanceDuration}
+        onDefaultDurationChange={handleUpdateMaintenanceDuration}
       />
       {taskToRemove && (
         <AlertDialog open onOpenChange={(open) => !open && setTaskToRemove(null)}>
@@ -1159,7 +1332,7 @@ export default function Home() {
             <AlertDialogHeader>
               <AlertDialogTitle>Are you sure?</AlertDialogTitle>
               <AlertDialogDescription>
-                This will remove task "{taskToRemove.jobCardNumber}" ({taskToRemove.itemCode}) from the schedule. Its time and quantity will be returned. This action cannot be undone.
+                This will remove task "{taskToRemove.jobCardNumber}" from the schedule. This action cannot be undone.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -1169,7 +1342,7 @@ export default function Home() {
           </AlertDialogContent>
         </AlertDialog>
       )}
-      {taskToEdit && (
+      {taskToEdit && taskToEdit.type === 'production' && (
           <EditScheduledTaskDialog
               open={!!taskToEdit}
               onOpenChange={handleCancelEdit}

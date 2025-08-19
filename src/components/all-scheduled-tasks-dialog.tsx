@@ -113,7 +113,7 @@ export const AllScheduledTasksDialog: React.FC<AllScheduledTasksDialogProps> = (
                             {task.priority}
                         </Badge>
                     </TableCell>
-                    <TableCell className="text-center">{task.scheduledQuantity}</TableCell>
+                    <TableCell className="text-center">{Math.round(task.scheduledQuantity)}</TableCell>
                     <TableCell>{format(new Date(task.startTime), 'HH:mm')}</TableCell>
                     <TableCell>{format(new Date(task.endTime), 'HH:mm')}</TableCell>
                   </TableRow>
@@ -137,5 +137,3 @@ export const AllScheduledTasksDialog: React.FC<AllScheduledTasksDialogProps> = (
     </Dialog>
   );
 };
-
-    

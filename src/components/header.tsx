@@ -1,6 +1,7 @@
 
 import React from 'react';
-import { Factory, Save, Loader2, Settings, Menu, Palette, RefreshCw, Settings2, GanttChartSquare, Download, LayoutGrid, BarChart2, Check, Eye, CalendarDays } from 'lucide-react';
+import Link from 'next/link';
+import { Factory, Save, Loader2, Settings, Menu, Palette, RefreshCw, Settings2, GanttChartSquare, Download, LayoutGrid, BarChart2, Check, Eye, CalendarDays, ClipboardList } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -52,6 +53,12 @@ export const Header: React.FC<HeaderProps> = ({
         </h1>
       </div>
       <div className="flex items-center gap-2">
+        <Link href="/tracking" passHref>
+          <Button variant="outline">
+              <ClipboardList className="mr-2 h-4 w-4" />
+              Tracking
+          </Button>
+        </Link>
         <Button variant="outline" onClick={onViewAllTasksClick}>
             <GanttChartSquare className="mr-2 h-4 w-4" />
             View All

@@ -1,4 +1,5 @@
 
+
 import React, { useMemo, useState } from 'react';
 import type { Task, Schedule, ProductionCondition, PressWorkload } from '@/types';
 import { Card, CardContent } from '@/components/ui/card';
@@ -12,6 +13,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
 import { cn } from '@/lib/utils';
+import { DieWorkloadView } from './die-workload-view';
 
 interface PressWorkloadPanelProps {
   tasks: Task[];
@@ -21,18 +23,31 @@ interface PressWorkloadPanelProps {
   selectedPress: number | null;
   onGenerateIdealSchedule: (pressNo: number) => void;
   generatingPressNo: number | null;
+  onDieSelect: (dieNo: number | null) => void;
+  selectedDie: number | null;
 }
 
-export const PressWorkloadPanel: React.FC<PressWorkloadPanelProps> = ({ tasks, scheduleByPress, productionConditions, onPressSelect, selectedPress, onGenerateIdealSchedule, generatingPressNo }) => {
+export const PressWorkloadPanel: React.FC<PressWorkloadPanelProps> = ({ 
+    tasks, 
+    scheduleByPress, 
+    productionConditions, 
+    onPressSelect, 
+    selectedPress, 
+    onGenerateIdealSchedule, 
+    generatingPressNo,
+    onDieSelect,
+    selectedDie
+}) => {
   const [isOpen, setIsOpen] = useState(true);
 
   const pressWorkloads = useMemo(() => {
-    if (productionConditions.length === 0) return [];
+    const pressNosFromConditions = productionConditions.map(pc => pc.pressNo);
+    const pressNosFromSchedule = Object.keys(scheduleByPress).map(Number);
+    const allPressNos = [...new Set([...pressNosFromConditions, ...pressNosFromSchedule])];
     
-    const pressNos = [...new Set(productionConditions.map(pc => pc.pressNo))];
     const workloads: Record<number, PressWorkload> = {};
 
-    pressNos.forEach(pressNo => {
+    allPressNos.forEach(pressNo => {
       workloads[pressNo] = {
         pressNo,
         pendingQuantity: 0,
@@ -40,30 +55,32 @@ export const PressWorkloadPanel: React.FC<PressWorkloadPanelProps> = ({ tasks, s
       };
     });
 
-    const tasksWithPresses = tasks.map(task => {
-        const relevantPresses = [...new Set(productionConditions
-            .filter(pc => pc.itemCode === task.itemCode && pc.material === task.material)
-            .map(pc => pc.pressNo))];
-        return { task, relevantPresses };
-    });
+    tasks.forEach(task => {
+        if (task.taskType !== 'production') return;
+        const produciblePresses = new Set(productionConditions
+            .filter(pc => pc.itemCode === task.itemCode)
+            .map(pc => pc.pressNo)
+        );
 
-    tasksWithPresses.forEach(({ task, relevantPresses }) => {
-        relevantPresses.forEach(pressNo => {
+        produciblePresses.forEach(pressNo => {
             if (workloads[pressNo]) {
                 workloads[pressNo].pendingQuantity += task.remainingQuantity;
             }
         });
     });
 
-    Object.values(scheduleByPress).forEach(pressSchedule => {
+    Object.values(scheduleByPress).flat().forEach(pressSchedule => {
       Object.values(pressSchedule).flat().forEach(scheduledTask => {
-        if (workloads[scheduledTask.pressNo]) {
+        if (workloads[scheduledTask.pressNo] && scheduledTask.type === 'production') {
           workloads[scheduledTask.pressNo].scheduledQuantity += scheduledTask.scheduledQuantity;
         }
       });
     });
+    
+    return Object.values(workloads)
+      .filter(w => w.pendingQuantity > 0 || w.scheduledQuantity > 0)
+      .sort((a, b) => a.pressNo - b.pressNo);
 
-    return Object.values(workloads).sort((a, b) => a.pressNo - b.pressNo);
   }, [tasks, scheduleByPress, productionConditions]);
 
 
@@ -71,15 +88,13 @@ export const PressWorkloadPanel: React.FC<PressWorkloadPanelProps> = ({ tasks, s
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
       <Card className="shadow-lg relative pt-6">
         
-        {/* The cool title effect */}
         <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-card px-4 py-1 rounded-full border shadow-sm flex items-center gap-2 z-10">
           <Layers className="w-5 h-5 text-primary" />
           <h2 className="text-lg font-bold font-headline whitespace-nowrap">
-            Press Workload
+            {selectedPress === null ? 'Press Workload' : `Die Workload for Press ${selectedPress}`}
           </h2>
         </div>
 
-        {/* Controls are always visible in the top right */}
         <div className="absolute top-2 right-2 flex items-center gap-1">
           {selectedPress !== null && (
             <Button
@@ -105,34 +120,43 @@ export const PressWorkloadPanel: React.FC<PressWorkloadPanelProps> = ({ tasks, s
           </CollapsibleTrigger>
         </div>
 
-        {/* This is the content that gets collapsed */}
         <CollapsibleContent>
-          <CardContent className="pt-2">
-            {pressWorkloads.length > 0 ? (
-              <ScrollArea className="w-full whitespace-nowrap">
-                <div className="flex w-max space-x-4 pb-4">
-                  {pressWorkloads.map((workload) => (
-                    <PressWorkloadCard
-                      key={workload.pressNo}
-                      workload={workload}
-                      onClick={() => onPressSelect(workload.pressNo)}
-                      isSelected={selectedPress === workload.pressNo}
-                      onGenerateIdealSchedule={onGenerateIdealSchedule}
-                      isGenerating={generatingPressNo === workload.pressNo}
-                    />
-                  ))}
-                </div>
-                <ScrollBar orientation="horizontal" />
-              </ScrollArea>
+            {selectedPress === null ? (
+                <CardContent className="p-4 pt-2">
+                    {pressWorkloads.length > 0 ? (
+                        <ScrollArea className="w-full whitespace-nowrap">
+                            <div className="flex w-max space-x-4 pb-4">
+                            {pressWorkloads.map((workload) => (
+                                <PressWorkloadCard
+                                key={workload.pressNo}
+                                workload={workload}
+                                onClick={() => onPressSelect(workload.pressNo)}
+                                isSelected={selectedPress === workload.pressNo}
+                                onGenerateIdealSchedule={onGenerateIdealSchedule}
+                                isGenerating={generatingPressNo === workload.pressNo}
+                                />
+                            ))}
+                            </div>
+                            <ScrollBar orientation="horizontal" />
+                        </ScrollArea>
+                    ) : (
+                        <p className="text-muted-foreground text-center py-4">
+                            No presses with pending or scheduled work.
+                        </p>
+                    )}
+                </CardContent>
             ) : (
-              <p className="text-muted-foreground text-center py-4">
-                Load production conditions to see press workloads.
-              </p>
+                <DieWorkloadView
+                    selectedPress={selectedPress}
+                    tasks={tasks}
+                    scheduleByPress={scheduleByPress}
+                    productionConditions={productionConditions}
+                    onDieSelect={onDieSelect}
+                    selectedDie={selectedDie}
+                />
             )}
-          </CardContent>
         </CollapsibleContent>
 
-        {/* This content shows ONLY when collapsed */}
         {!isOpen && (
           <CardContent className="pt-2 pb-4">
             {pressWorkloads.length > 0 ? (
@@ -155,7 +179,7 @@ export const PressWorkloadPanel: React.FC<PressWorkloadPanelProps> = ({ tasks, s
               </div>
             ) : (
               <p className="text-muted-foreground text-center py-2 text-sm">
-                No presses available.
+                No active presses.
               </p>
             )}
           </CardContent>

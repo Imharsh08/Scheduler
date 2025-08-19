@@ -1,10 +1,11 @@
 
+
 'use client';
 
 import React, { useState, useEffect } from 'react';
 import type { Task, Shift, ProductionCondition } from '@/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { GripVertical, Package, Clock, CalendarDays, CalendarPlus } from 'lucide-react';
+import { GripVertical, Package, Clock, CalendarDays, CalendarPlus, Wrench, Warehouse } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { formatDistanceToNow, format } from 'date-fns';
@@ -66,6 +67,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
   const availableDies = React.useMemo(() => {
+    if (task.taskType === 'maintenance') return task.dieNo ? [task.dieNo] : [];
     let conditions = productionConditions.filter(
       pc => pc.itemCode === task.itemCode && pc.material === task.material
     );
@@ -74,15 +76,18 @@ export const TaskCard: React.FC<TaskCardProps> = ({
     }
     return [...new Set(conditions.map(pc => pc.dieNo))].sort((a,b) => a - b);
   }, [task, productionConditions, selectedPress]);
+  
+  const isMaintenanceTask = task.taskType === 'maintenance';
 
   return (
     <div
-      draggable
+      draggable={!isSchedulingDisabled}
       onDragStart={(e) => onDragStart(e, task.jobCardNumber)}
-      className="cursor-grab active:cursor-grabbing"
+      className={cn("cursor-grab active:cursor-grabbing", isSchedulingDisabled && "cursor-not-allowed")}
     >
       <Card className={cn(
-          "hover:shadow-md transition-shadow duration-200 bg-card hover:border-primary",
+          "hover:shadow-md transition-shadow duration-200 bg-card",
+          "hover:border-primary",
           task.priority === 'High' && "border-destructive hover:border-destructive/80"
       )}>
         <CardHeader className="flex flex-row items-start justify-between p-3 pb-2">
@@ -110,8 +115,16 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         </CardHeader>
         <CardContent className="p-3 pt-1 space-y-2">
           <div>
-            <p className="text-sm font-medium">Quantity: <span className="font-bold">{task.remainingQuantity}</span></p>
+            <p className="text-sm font-medium">To Schedule: <span className="font-bold">{Math.ceil(task.remainingQuantity)}</span></p>
+            <p className="text-xs text-muted-foreground">Order: {task.orderedQuantity}</p>
           </div>
+            
+          {(task.fgStockConsumed ?? 0) > 0 && (
+            <div className="flex items-center gap-2 text-xs text-green-700 bg-green-100 p-1.5 rounded-md">
+                <Warehouse className="w-4 h-4" />
+                <span>{task.fgStockConsumed} pcs allocated from Finished Goods Stock.</span>
+            </div>
+          )}
 
           {availableDies.length > 0 && (
             <div>

@@ -7,14 +7,8 @@ import type { Schedule, ScheduledTask, Shift } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { PackageSearch } from 'lucide-react';
 import { getDieChartColor } from '@/lib/color-utils';
-import { format, setHours, setMinutes, setSeconds, addMinutes } from 'date-fns';
-
-const getShiftStartDateTime = (shift: Shift): Date => {
-    const [year, month, day] = shift.date.split('-').map(Number);
-    const hours = shift.type === 'Day' ? 8 : 20;
-    // JS Date months are 0-indexed, so subtract 1 from month. Use UTC to avoid timezone shifts.
-    return setSeconds(setMinutes(setHours(new Date(Date.UTC(year, month - 1, day)), hours), 0), 0);
-};
+import { format, addMinutes } from 'date-fns';
+import { getShiftStartDateTime } from '@/lib/time-utils';
 
 interface GanttChartViewProps {
   scheduleByPress: Record<number, Schedule>;
@@ -177,5 +171,3 @@ export const GanttChartView: React.FC<GanttChartViewProps> = ({
     </Card>
   );
 };
-
-    

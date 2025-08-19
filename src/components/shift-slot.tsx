@@ -1,10 +1,13 @@
 
+'use client';
+
 import React, { useState } from 'react';
 import type { Shift, ScheduledTask } from '@/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScheduledTaskCard } from './scheduled-task-card';
 import { Sun, Moon, Clock } from 'lucide-react';
-import { Progress } from '@/components/ui/progress';
+import { Progress } from './ui/progress';
+import { format, parse } from 'date-fns';
 
 interface ShiftSlotProps {
   shift: Shift;
@@ -15,6 +18,15 @@ interface ShiftSlotProps {
   onEditRequest: (task: ScheduledTask) => void;
   onTaskDragStart: (e: React.DragEvent, task: ScheduledTask) => void;
 }
+
+const formatTime12h = (time: string) => {
+    try {
+      const date = parse(time, 'HH:mm', new Date());
+      return format(date, 'hh:mm a');
+    } catch {
+      return 'Invalid';
+    }
+};
 
 export const ShiftSlot: React.FC<ShiftSlotProps> = ({ shift, scheduledTasks, onDrop, dieColors, onRemoveRequest, onEditRequest, onTaskDragStart }) => {
   const [isOver, setIsOver] = useState(false);
@@ -66,6 +78,9 @@ export const ShiftSlot: React.FC<ShiftSlotProps> = ({ shift, scheduledTasks, onD
                 <TimeLeftDisplay />
             </div>
         </div>
+        <CardDescription className="text-xs text-muted-foreground pt-1">
+            {formatTime12h(shift.startTime)} - {formatTime12h(shift.endTime)}
+        </CardDescription>
         <Progress 
           value={isOverCapacity ? 100 : capacityUsed} 
           className={`w-full h-2 mt-2 ${isOverCapacity ? '[&>div]:bg-destructive' : ''}`}
@@ -81,7 +96,7 @@ export const ShiftSlot: React.FC<ShiftSlotProps> = ({ shift, scheduledTasks, onD
                     dieColors={dieColors} 
                     onRemoveRequest={onRemoveRequest}
                     onEditRequest={onEditRequest}
-                    onDragStart={onTaskDragStart}
+                    onTaskDragStart={onTaskDragStart}
                   />
                 ))}
             </div>

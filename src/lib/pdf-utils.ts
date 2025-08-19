@@ -86,8 +86,8 @@ export const generateSchedulePdf = ({
             task.pressNo,
             format(new Date(task.startTime), 'dd MMM'),
             type,
-            format(new Date(task.startTime), 'HH:mm'),
-            format(new Date(task.endTime), 'HH:mm'),
+            format(new Date(task.startTime), 'hh:mm a'),
+            format(new Date(task.endTime), 'hh:mm a'),
             task.jobCardNumber,
             task.itemCode,
             task.dieNo,
@@ -112,5 +112,3 @@ export const generateSchedulePdf = ({
     
     doc.save(filename);
 };
-
-    
