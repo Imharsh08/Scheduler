@@ -1,15 +1,20 @@
 
+
+'use client';
+
 import React from 'react';
 import type { Task, Shift, ProductionCondition } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { TaskCard } from './task-card';
-import { ListTodo, Download, Loader2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { MaintenanceTaskCard } from './maintenance-task-card';
+import { ListTodo, Loader2, Wrench, Search } from 'lucide-react';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Button } from './ui/button';
+import { Input } from './ui/input';
 
 interface TaskListProps {
   tasks: Task[];
   onDragStart: (e: React.DragEvent<HTMLDivElement>, taskId: string) => void;
-  onLoadTasks: () => void;
   isLoading: boolean;
   onScheduleClick: (task: Task, shiftId: string) => void;
   shifts: Shift[];
@@ -17,19 +22,24 @@ interface TaskListProps {
   productionConditions: ProductionCondition[];
   dieColors: Record<number, string>;
   selectedPress: number | null;
+  onAddMaintenanceClick: () => void;
+  searchQuery: string;
+  setSearchQuery: (query: string) => void;
 }
 
 export const TaskList: React.FC<TaskListProps> = ({ 
   tasks, 
   onDragStart, 
-  onLoadTasks, 
   isLoading, 
   onScheduleClick, 
   shifts, 
   isSchedulingDisabled,
   productionConditions,
   dieColors,
-  selectedPress 
+  selectedPress,
+  onAddMaintenanceClick,
+  searchQuery,
+  setSearchQuery
 }) => {
   const sortedTasks = React.useMemo(() => {
     const priorityOrder: Record<Task['priority'], number> = {
@@ -40,6 +50,10 @@ export const TaskList: React.FC<TaskListProps> = ({
     };
 
     return [...tasks].sort((a, b) => {
+      // Maintenance tasks always on top
+      if (a.taskType === 'maintenance' && b.taskType !== 'maintenance') return -1;
+      if (a.taskType !== 'maintenance' && b.taskType === 'maintenance') return 1;
+
       const priorityA = priorityOrder[a.priority];
       const priorityB = priorityOrder[b.priority];
       if (priorityA !== priorityB) {
@@ -68,35 +82,57 @@ export const TaskList: React.FC<TaskListProps> = ({
                 <ListTodo className="w-6 h-6" />
                 <CardTitle className="font-headline">Unscheduled Tasks</CardTitle>
             </div>
-             <Button onClick={onLoadTasks} disabled={isLoading} size="sm">
-                {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
-                Load
+            <Button variant="outline" size="sm" onClick={onAddMaintenanceClick}>
+                <Wrench className="mr-2 h-4 w-4" />
+                Maintenance
             </Button>
         </div>
+         <div className="relative mt-2">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search by Job Card or Item..."
+              className="pl-10"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
       </CardHeader>
-      <CardContent className="flex-1 overflow-y-auto p-4">
-        <div className="space-y-4">
-          {isLoading && tasks.length === 0 ? (
-             <div className="flex justify-center items-center h-full">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-             </div>
-          ) : sortedTasks.length > 0 ? (
-            sortedTasks.map((task) => (
-              <TaskCard 
-                key={task.jobCardNumber} 
-                task={task} 
-                onDragStart={onDragStart}
-                onScheduleClick={onScheduleClick}
-                shifts={shifts}
-                isSchedulingDisabled={isSchedulingDisabled}
-                productionConditions={productionConditions}
-                dieColors={dieColors}
-                selectedPress={selectedPress}
-              />
-            ))
-          ) : (
-            <p className="text-muted-foreground text-center py-4">No tasks loaded or matching filter.</p>
-          )}
+      <CardContent className="flex-1 overflow-auto p-0">
+        <div className="h-full overflow-hidden p-4 pt-0">
+          <ScrollArea className="h-full pr-2">
+            <div className="space-y-4">
+              {isLoading && tasks.length === 0 ? (
+                <div className="flex justify-center items-center h-full">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                </div>
+              ) : sortedTasks.length > 0 ? (
+                sortedTasks.map((task, index) => (
+                  task.taskType === 'maintenance' ? (
+                    <MaintenanceTaskCard 
+                      key={`${task.jobCardNumber}-${index}`}
+                      task={task}
+                      onDragStart={onDragStart}
+                      isSchedulingDisabled={isSchedulingDisabled}
+                    />
+                  ) : (
+                    <TaskCard 
+                      key={`${task.jobCardNumber}-${index}`}
+                      task={task} 
+                      onDragStart={onDragStart}
+                      onScheduleClick={onScheduleClick}
+                      shifts={shifts}
+                      isSchedulingDisabled={isSchedulingDisabled}
+                      productionConditions={productionConditions}
+                      dieColors={dieColors}
+                      selectedPress={selectedPress}
+                    />
+                  )
+                ))
+              ) : (
+                <p className="text-muted-foreground text-center py-4">No tasks loaded or matching filter.</p>
+              )}
+            </div>
+          </ScrollArea>
         </div>
       </CardContent>
     </Card>

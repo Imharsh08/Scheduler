@@ -54,7 +54,7 @@ export const EditScheduledTaskDialog: React.FC<EditScheduledTaskDialogProps> = (
 
   const totalAvailableQuantity = useMemo(() => {
     if (!task || !originalTaskFromList) return 0;
-    return originalTaskFromList.remainingQuantity + task.scheduledQuantity;
+    return (originalTaskFromList.remainingQuantity || 0) + Math.round(task.scheduledQuantity);
   }, [originalTaskFromList, task]);
 
   const dieOptions = useMemo(() => {
@@ -87,22 +87,28 @@ export const EditScheduledTaskDialog: React.FC<EditScheduledTaskDialogProps> = (
   const operationOptions = useMemo(() => {
     if (!selectedCondition) return [];
     const options = [];
-    if (selectedCondition.piecesPerCycle1 > 0) options.push({ value: '1', label: `One Side (${selectedCondition.piecesPerCycle1} pcs/cycle)` });
-    if (selectedCondition.piecesPerCycle2 > 0) options.push({ value: '2', label: `Two Side (${selectedCondition.piecesPerCycle2} pcs/cycle)` });
+    if (selectedCondition.piecesPerHour1 > 0) {
+      options.push({ value: '1', label: `One Side (${selectedCondition.piecesPerHour1} pcs/hour)` });
+    }
+    if (selectedCondition.piecesPerHour2 > 0) {
+      options.push({ value: '2', label: `Two Side (${selectedCondition.piecesPerHour2} pcs/hour)` });
+    }
     return options;
   }, [selectedCondition]);
 
   const piecesPerCycle = useMemo(() => {
     if (!selectedCondition || !editedOperation) return 0;
-    return editedOperation === '1' ? selectedCondition.piecesPerCycle1 : selectedCondition.piecesPerCycle2;
+    const piecesPerHour = editedOperation === '1' ? selectedCondition.piecesPerHour1 : selectedCondition.piecesPerHour2;
+    if (piecesPerHour === 0 || selectedCondition.cureTime === 0) return 0;
+    return (piecesPerHour * selectedCondition.cureTime) / 60;
   }, [selectedCondition, editedOperation]);
 
   useEffect(() => {
     if (task && open) {
       setStep('details');
       setEditedDieNo(String(task.dieNo));
-      setEditedMaterial(task.material);
-      setScheduledQuantity(String(task.scheduledQuantity));
+      setEditedMaterial(task.material || '');
+      setScheduledQuantity(String(Math.round(task.scheduledQuantity)));
       
       const originalCondition = productionConditions.find(pc => 
         pc.itemCode === task.itemCode && 
@@ -114,9 +120,13 @@ export const EditScheduledTaskDialog: React.FC<EditScheduledTaskDialogProps> = (
       if (originalCondition) {
         const originalCycles = task.timeTaken / originalCondition.cureTime;
         const originalPcsPerCycle = Math.round(task.scheduledQuantity / originalCycles);
-        if (originalPcsPerCycle === originalCondition.piecesPerCycle1) {
+
+        const pcsPerCycle1 = (originalCondition.piecesPerHour1 * originalCondition.cureTime) / 60;
+        const pcsPerCycle2 = (originalCondition.piecesPerHour2 * originalCondition.cureTime) / 60;
+
+        if (Math.abs(originalPcsPerCycle - pcsPerCycle1) < 0.1) {
             setEditedOperation('1');
-        } else if (originalPcsPerCycle === originalCondition.piecesPerCycle2) {
+        } else if (Math.abs(originalPcsPerCycle - pcsPerCycle2) < 0.1) {
             setEditedOperation('2');
         } else {
             setEditedOperation('');
@@ -264,6 +274,8 @@ export const EditScheduledTaskDialog: React.FC<EditScheduledTaskDialogProps> = (
               <div className="text-muted-foreground">Shift Capacity Available:</div>
               <div className="font-medium text-right">{shift.remainingCapacity + task.timeTaken} min</div>
               <Separator className="col-span-2 my-1" />
+              <div className="text-muted-foreground">Pieces/Hour:</div>
+              <div className="font-mono text-right">{editedOperation === '1' ? selectedCondition?.piecesPerHour1 : selectedCondition?.piecesPerHour2}</div>
               <div className="text-muted-foreground">New Time Required:</div>
               <div className="font-mono text-right">{isNaN(newTime) ? 0 : newTime} min</div>
             </div>

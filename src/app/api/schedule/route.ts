@@ -1,58 +1,38 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import type { ScheduledTask } from '@/types';
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { sheetUrl, schedule } = body;
+    const { sheetUrl, tasks } = body;
 
-    if (!sheetUrl || !schedule) {
-      return NextResponse.json({ error: 'Sheet URL and schedule data are required' }, { status: 400 });
+    if (!sheetUrl || !tasks) {
+      return NextResponse.json({ error: 'Sheet URL and tasks data are required' }, { status: 400 });
+    }
+    
+    if (!Array.isArray(tasks)) {
+      return NextResponse.json({ error: 'Tasks data must be an array' }, { status: 400 });
     }
 
-    const scheduledTasks: Partial<ScheduledTask>[] = Object.values(schedule as Record<string, ScheduledTask[]>).flat().map((task) => ({
-      jobCardNumber: task.jobCardNumber,
-      itemCode: task.itemCode,
-      material: task.material,
-      scheduledQuantity: task.scheduledQuantity,
-      pressNo: task.pressNo,
-      dieNo: task.dieNo,
-      timeTaken: task.timeTaken,
-      shiftId: task.shiftId,
-      startTime: task.startTime,
-      endTime: task.endTime,
-    }));
+    const scriptPayload = { tasks };
 
-    if(scheduledTasks.length === 0) {
-        return NextResponse.json({ result: "Success", count: 0, message: "No tasks to save." });
-    }
-
-    const response = await fetch(sheetUrl, {
+    // Proxy the request to Google Apps Script by redirecting to the tracking API route
+    const trackingApiUrl = new URL('/api/tracking', request.url);
+    
+    const proxyResponse = await fetch(trackingApiUrl.toString(), {
       method: 'POST',
       headers: {
-        'Content-Type': 'text/plain;charset=utf-8',
+        'Content-Type': 'application/json',
       },
-      body: JSON.stringify(scheduledTasks),
-      redirect: 'follow', 
+      body: JSON.stringify({ sheetUrl, tasks }),
     });
 
-    const responseText = await response.text();
+    const responseData = await proxyResponse.json();
     
-    if (!response.ok) {
-        try {
-            const errorJson = JSON.parse(responseText);
-            return NextResponse.json({ error: 'Failed to save to Google Sheet.', details: errorJson.error || responseText }, { status: response.status });
-        } catch (e) {
-            return NextResponse.json({ error: 'Failed to save to Google Sheet.', details: responseText }, { status: response.status });
-        }
+    if (!proxyResponse.ok) {
+        return NextResponse.json(responseData, { status: proxyResponse.status });
     }
     
-    try {
-        const data = JSON.parse(responseText);
-        return NextResponse.json(data);
-    } catch(e) {
-        return NextResponse.json({ result: responseText });
-    }
+    return NextResponse.json(responseData);
 
   } catch (error) {
     console.error('Proxy save error:', error);

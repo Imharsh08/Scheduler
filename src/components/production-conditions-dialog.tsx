@@ -47,8 +47,8 @@ export const ProductionConditionsDialog: React.FC<ProductionConditionsDialogProp
                 <TableHead className="text-center">Press</TableHead>
                 <TableHead className="text-center">Die</TableHead>
                 <TableHead className="text-center">Cure Time (min)</TableHead>
-                <TableHead className="text-center">Pcs/Cycle (1 Side)</TableHead>
-                <TableHead className="text-center">Pcs/Cycle (2 Side)</TableHead>
+                <TableHead className="text-center">Pcs/Hour (1 Side)</TableHead>
+                <TableHead className="text-center">Pcs/Hour (2 Side)</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -66,8 +66,8 @@ export const ProductionConditionsDialog: React.FC<ProductionConditionsDialogProp
                     <TableCell className="text-center">{pc.pressNo}</TableCell>
                     <TableCell className="text-center">{pc.dieNo}</TableCell>
                     <TableCell className="text-center">{pc.cureTime}</TableCell>
-                    <TableCell className="text-center">{pc.piecesPerCycle1}</TableCell>
-                    <TableCell className="text-center">{pc.piecesPerCycle2}</TableCell>
+                    <TableCell className="text-center">{pc.piecesPerHour1}</TableCell>
+                    <TableCell className="text-center">{pc.piecesPerHour2}</TableCell>
                   </TableRow>
                 ))
               ) : (

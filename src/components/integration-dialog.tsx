@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -20,7 +21,6 @@ interface IntegrationDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   urls: IntegrationUrls;
-  onSaveUrls: (newUrls: IntegrationUrls) => void;
   onLoadFromSheet: (configUrl: string) => Promise<IntegrationUrls | null>;
 }
 
@@ -28,23 +28,19 @@ export const IntegrationDialog: React.FC<IntegrationDialogProps> = ({
   open,
   onOpenChange,
   urls,
-  onSaveUrls,
   onLoadFromSheet,
 }) => {
   const [configUrl, setConfigUrl] = useState(urls.config);
-  const [loadedUrls, setLoadedUrls] = useState(urls);
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     setConfigUrl(urls.config);
-    setLoadedUrls(urls);
   }, [urls, open]);
 
   const handleLoad = async () => {
     setIsLoading(true);
     const result = await onLoadFromSheet(configUrl);
     if (result) {
-      setLoadedUrls(result);
       onOpenChange(false);
     }
     setIsLoading(false);
@@ -73,7 +69,7 @@ export const IntegrationDialog: React.FC<IntegrationDialogProps> = ({
               />
               <Button onClick={handleLoad} disabled={isLoading || !configUrl}>
                 {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-                Load
+                Load & Fetch
               </Button>
             </div>
           </div>
@@ -85,15 +81,23 @@ export const IntegrationDialog: React.FC<IntegrationDialogProps> = ({
             <h4 className="text-sm font-medium text-muted-foreground">Loaded Links</h4>
              <div className="space-y-2">
                 <Label htmlFor="tasks">Unscheduled Tasks URL</Label>
-                <Input id="tasks" value={loadedUrls.tasks} readOnly placeholder="Load from config..."/>
+                <Input id="tasks" value={urls.tasks} readOnly placeholder="Load from config..."/>
+             </div>
+             <div className="space-y-2">
+                <Label htmlFor="scheduledTasks">Saved Schedule URL</Label>
+                <Input id="scheduledTasks" value={urls.scheduledTasks} readOnly placeholder="Load from config..."/>
              </div>
              <div className="space-y-2">
                 <Label htmlFor="conditions">Production Conditions URL</Label>
-                <Input id="conditions" value={loadedUrls.conditions} readOnly placeholder="Load from config..."/>
+                <Input id="conditions" value={urls.conditions} readOnly placeholder="Load from config..."/>
              </div>
              <div className="space-y-2">
                 <Label htmlFor="save">Save Schedule URL</Label>
-                <Input id="save" value={loadedUrls.save} readOnly placeholder="Load from config..."/>
+                <Input id="save" value={urls.save} readOnly placeholder="Load from config..."/>
+             </div>
+             <div className="space-y-2">
+                <Label htmlFor="tracking">Save Tracking URL</Label>
+                <Input id="tracking" value={urls.tracking || ''} readOnly placeholder="Load from config..."/>
              </div>
         </div>
         
