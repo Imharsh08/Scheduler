@@ -1,10 +1,50 @@
-# Firebase Studio
+# Scheduler (ProSched)
 
-This is a NextJS starter in Firebase Studio.
+Scheduling Webapp for production planning and resource scheduling.
+
+# Table of contents
+* About
+* Features
+* Screenshots
+* Getting started (local)
+* Usage
+* Contributing
+
+# About
+A scheduling web application built with Next.js and TypeScript for planning, tracking, and exporting production schedules.
+
+# Features
+* Gantt chart view
+* Weekly and downloadable schedules
+* Production tracking and sheet integration
+* Race/die differentiator and view-by-dies
+* Schedule settings and configuration
+
 
 To get started, take a look at src/app/page.tsx.
 
-## Running Locally on Your PC
+<p align="center"> <img src="./assets/screenshots/main%20view.png" alt="Main view" width="500" /> <img src="./assets/screenshots/gantt%20chart.png" alt="Gantt chart" width="500" /> </p> <details> <summary><strong>More views</strong> — click to expand</summary> <p align="center"> <img src="./assets/screenshots/weekly%20schedule.png" alt="Weekly schedule" width="380" /> <img src="./assets/screenshots/schedule%20downloadable.png" alt="Downloadable schedule" width="380" /> </p>
+Short descriptions:
+
+Weekly schedule: compact, week-focused schedule view.
+Downloadable schedule: exportable/downloadable schedule layout.
+</details> <details> <summary><strong>Additional screens</strong> — click to expand</summary> <p align="center"> <img src="./assets/screenshots/Production%20tracking.png" alt="Production tracking" width="380" /> <img src="./assets/screenshots/Schedule%20Setting.png" alt="Schedule Setting" width="380" /> </p>
+Short descriptions:
+
+Production tracking: track production quantities and status.
+Schedule settings: configure scheduling parameters and preferences.
+</details> <details> <summary><strong>Integration & filters</strong> — click to expand</summary> <p align="center"> <img src="./assets/screenshots/Sheet%20integration.png" alt="Sheet integration" width="380" /> <img src="./assets/screenshots/View%20by%20dies.png" alt="View by dies" width="380" /> </p>
+Short descriptions:
+
+Sheet integration: connect to sheets for import/export of schedule data.
+View by dies: filter and view schedule items grouped by die.
+</details> <details> <summary><strong>Small tools</strong> — click to expand</summary> <p align="center"> <img src="./assets/screenshots/die%20differenciator.png" alt="Die differenciator" width="480" /> </p>
+Short description:
+
+Die differentiator: helper tool for distinguishing dies or variants.
+</details>
+
+### Running Locally on Your PC
 
 You can run this application on your local machine (like a Windows PC) for development and testing. You don't need to convert it to a desktop application. Here's how:
 
@@ -52,16 +92,16 @@ Your application is now running locally! Any changes you save to the code will a
 
 ## Downloading Your Project
 
-You can download a `.zip` file of your entire project to your local computer. While there is usually a "Download Code" button in the top toolbar, you can also use the built-in Firebase Terminal.
+You can download a `.zip` file of your entire project to your local computer. While there is usually a "Download Code" top in the top toolbar.
 
 ### Step-by-Step Guide
 
-1.  **Open the Terminal**: At the bottom of the Firebase Studio interface, you should see a "Terminal" tab. Click on it to open the command-line interface.
+# Usage
+* Use the main view to create and edit schedules.
+* Export or download schedules from the "Download" option.
+* Use the Gantt chart for timeline-based visualization.
+* Configure schedule settings from the settings panel.
 
-2.  **Run the Export Command**: In the terminal, type the following command and press Enter:
-    ```bash
-    firebase studio:export prosched-app.zip
-    ```
-    This command tells Studio to package your entire project into a single zip file named `prosched-app.zip`.
-
-3.  **Locate and Download**: After the command finishes (it might take a moment), you will see the `prosched-app.zip` file appear in the file explorer panel on the left-hand side of the screen. Right-click on this file and select "Download" to save it to your computer.
+# Contributing
+* Create a branch for your change: git checkout -b my-feature
+* Commit and push, then open a pull request. 
