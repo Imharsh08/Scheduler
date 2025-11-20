@@ -53,6 +53,30 @@ You can run this application on your local machine (like a Windows PC) for devel
 1.  **Install Node.js**: If you don't have it installed, download and install the "LTS" (Long Term Support) version of Node.js from the official website: [https://nodejs.org/](https://nodejs.org/)
     *   Node.js includes `npm` (Node Package Manager), which you'll need to install the project's dependencies.
 
+### Important — Read these scripts before using the app
+
+Before you run or modify any Apps Script or change the sheet structure, read the following files in the docs/ folder:
+
+- [get-urls-apps-script.js](./docs/get-urls-apps-script.js)  
+  Fetches URLs from the Google Sheet. Configure this script with the correct sheet ID and default sheet name before running.
+
+- [google-apps-script.js](./docs/google-apps-script.js)  
+  Handles scheduled-time behavior and sheet updates. Note: scheduled time values are not forwarded to the molding sheet in the same format — check the comments for handling of JC numbers and start times.
+
+- [production-conditions-apps-script.js](./docs/production-conditions-apps-script.js)  
+  Contains production-condition logic and mappings (for example, producing item `GCH_S121_NBR` with die `569`). Review these rules before changing production or die assignments.
+
+Why read these first
+- These scripts contain configuration values and logic that affect how data moves between sheets and how schedules are generated.
+- Changing sheet columns or IDs without updating the scripts can break imports/exports.
+- Review the inline comments in each file for environment-specific instructions and examples.
+
+Need adjustments?
+- I can add this snippet into README.md or create docs/README.md and commit it on a new branch (suggested: add-docs-index). Reply with:
+  - A to create a new branch and commit (provide branch name or accept default add-docs-index), or
+  - B to overwrite README.md on master, or
+  - C to just get the snippet (you’ll paste it yourself).
+
 ### Initial Setup
 
 1.  **Open a Terminal**: Open a command prompt, PowerShell, or any other terminal on your Windows PC.
